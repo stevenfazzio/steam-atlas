@@ -10,7 +10,7 @@ load_dotenv()
 # ── Project naming ───────────────────────────────────────────────────────────
 # Single source of truth for the user-facing name. Tweak here when we rename.
 PROJECT_NAME = "Steam Map"
-PROJECT_TAGLINE = "A semantic map of the top games on Steam"
+PROJECT_TAGLINE = "A semantic map of the top 10,000 games on Steam"
 
 # ── Directories ──────────────────────────────────────────────────────────────
 DATA_DIR = Path("data")

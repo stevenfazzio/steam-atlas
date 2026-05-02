@@ -27,7 +27,6 @@ from config import (
     PROJECT_NAME,
     PROJECT_TAGLINE,
     STEAM_MAP_HTML,
-    TARGET_GAME_COUNT,
     UMAP_COORDS_NPZ,
 )
 
@@ -36,18 +35,28 @@ def _facet_slug(facet_name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "_", facet_name).strip("_").lower()
 
 
+# Tiled SVG turbulence used as a film-grain overlay on body::before. Rendered
+# inline as a data URI so there's no external asset; opacity and blend mode are
+# tuned in the body::before rule.
+_GRAIN_SVG_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"  # noqa: E501
+
+
+# Diverging palette tuned for legibility on the dark page background.
+# The original light-mode palette used deep greens (#1f8b4c) that turn muddy
+# on near-black; here we shift toward more luminous, slightly desaturated
+# values so the chips read clearly inside the hover card.
 SENTIMENT_COLORS = {
-    "Overwhelmingly Positive": "#1f8b4c",
-    "Very Positive": "#3aa15b",
-    "Mostly Positive": "#7bc370",
-    "Positive": "#a5d99a",
-    "Mixed": "#dabd57",
-    "Mostly Negative": "#d99272",
-    "Negative": "#c25656",
-    "Very Negative": "#a83a3a",
-    "Overwhelmingly Negative": "#7c1f1f",
-    "Too Few Reviews": "#999999",
-    "No User Reviews": "#bbbbbb",
+    "Overwhelmingly Positive": "#7ee16e",
+    "Very Positive": "#5ecc4d",
+    "Mostly Positive": "#4ba83b",
+    "Positive": "#3a8530",
+    "Mixed": "#e6b94a",
+    "Mostly Negative": "#e69661",
+    "Negative": "#d5685a",
+    "Very Negative": "#b94545",
+    "Overwhelmingly Negative": "#8a2e2e",
+    "Too Few Reviews": "#7a8190",
+    "No User Reviews": "#5a6172",
 }
 
 
@@ -122,18 +131,24 @@ def main():
     raw = np.sqrt(df["total_reviews"].values.astype(float).clip(min=1))
     marker_sizes = 3 + 12 * (raw - raw.min()) / max(raw.max() - raw.min(), 1)
 
+    # Sentiment chip uses the per-row sentiment_color twice: as a glowing tinted
+    # background (~20% opacity) and as the foreground text/border. Gives each chip
+    # a luminous "this is the sentiment" feel against the dark card.
     hover_template = (
         '<div class="hc">'
-        '  <img src="{header_image}" class="hc-img" alt="" />'
+        '  <div class="hc-img-wrap">'
+        '    <img src="{header_image}" class="hc-img" alt="" />'
+        "  </div>"
         '  <div class="hc-body">'
         '    <div class="hc-title">{name}</div>'
         '    <div class="hc-tagline">{tagline}</div>'
         '    <div class="hc-classify">'
         '      <span class="hc-sentiment" '
-        'style="background:{sentiment_color}1f; color:{sentiment_color}">{sentiment}</span>'
+        'style="background:{sentiment_color}33; color:{sentiment_color}; '
+        'border-color:{sentiment_color}66">{sentiment}</span>'
         '      <span class="hc-chip">{primary_genre}</span>'
-        '      <span class="hc-chip">{review_str} reviews</span>'
-        '      <span class="hc-chip">{price_str}</span>'
+        '      <span class="hc-chip hc-chip-num">{review_str}</span>'
+        '      <span class="hc-chip hc-chip-num">{price_str}</span>'
         "    </div>"
         '    <div class="hc-summary">{summary}</div>'
         "  </div>"
@@ -242,46 +257,367 @@ def main():
             }
         )
 
+    # The .deck-tooltip rule body comes from this string; the rest of the chrome
+    # is styled in custom_css below (kept together so the design tokens stay
+    # in one place). We zero out the wrapper here so our .deck-tooltip rule in
+    # custom_css fully owns the tooltip's container styling.
     tooltip_css = """
-        font-family: 'IBM Plex Sans', system-ui, sans-serif;
-        font-size: 13px;
-        color: #1a1a2e !important;
-        background: #ffffff !important;
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-        max-width: 360px;
+        background: transparent !important;
+        border: none !important;
         padding: 0 !important;
-        overflow: hidden;
+        box-shadow: none !important;
     """
-    custom_css = """
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap');
-    .hc { display: flex; flex-direction: column; }
+
+    # ── Design tokens (tactical-atlas) ──────────────────────────────────────
+    # Page is a deep ink-navy with subtle radial light + film grain. UI panels
+    # are translucent dark with hairline borders. Brass is the primary accent
+    # (cartouche, rules, taglines); cyan is the cool interactive accent (focus,
+    # store CTA glow). Sharper corners (4px) and tighter typographic rhythm
+    # than the default DataMapPlot chrome to read more "instrument panel" and
+    # less "dashboard widget".
+    custom_css = r"""
+    @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Fraunces:ital,opsz,wght@1,12..72,400;1,12..72,500&display=swap');
+
+    :root {
+        --ink: #0a0e15;
+        --ink-2: #0f141d;
+        --ink-3: #161c27;
+        --ink-4: #1f2735;
+        --rule: rgba(255, 255, 255, 0.08);
+        --rule-strong: rgba(255, 255, 255, 0.16);
+        --text: #e3e8f0;
+        --text-dim: #97a0b3;
+        --text-faint: #5d6678;
+        --brass: #d8a657;
+        --brass-soft: #b8893f;
+        --brass-glow: rgba(216, 166, 87, 0.22);
+        --cyan: #5fb3a1;
+        --cyan-glow: rgba(95, 179, 161, 0.30);
+    }
+
+    /* ── Page atmosphere ────────────────────────────────────────────────── */
+    body {
+        background:
+          radial-gradient(ellipse 90% 60% at 50% 30%, rgba(78, 102, 138, 0.18), transparent 70%),
+          radial-gradient(ellipse 60% 60% at 85% 85%, rgba(95, 179, 161, 0.05), transparent 60%),
+          var(--ink) !important;
+        color: var(--text) !important;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
+    }
+    /* Film grain overlay — a tiled SVG turbulence at low opacity. Sits behind
+       the deck.gl canvas (which has z-index: 1) so it doesn't muddy the points,
+       but adds tooth to the otherwise-flat dark fields. */
+    body::before {
+        content: "";
+        position: fixed; inset: 0;
+        pointer-events: none;
+        z-index: 0;
+        background-image: url("__GRAIN_SVG_DATA_URI__");
+        opacity: 0.7;
+        mix-blend-mode: screen;
+    }
+
+    /* ── Container chrome (panels, dropdowns, search) ──────────────────── */
+    .container-box {
+        background: rgba(15, 20, 29, 0.82) !important;
+        border: 1px solid var(--rule) !important;
+        backdrop-filter: blur(12px) saturate(140%);
+        -webkit-backdrop-filter: blur(12px) saturate(140%);
+        box-shadow:
+            0 10px 28px rgba(0, 0, 0, 0.55),
+            0 1px 0 rgba(255, 255, 255, 0.04) inset !important;
+        border-radius: 4px !important;
+    }
+    .more-opaque {
+        background-color: rgba(15, 20, 29, 0.94) !important;
+    }
+
+    /* ── Title cartouche ───────────────────────────────────────────────── */
+    #title-container {
+        margin: 18px !important;
+        padding: 20px 24px 18px !important;
+        max-width: 460px;
+        line-height: 1.2 !important;
+    }
+    #main-title {
+        display: block !important;
+        font-family: 'Big Shoulders Display', sans-serif !important;
+        font-size: 46pt !important;
+        font-weight: 800 !important;
+        line-height: 0.92 !important;
+        letter-spacing: 0.025em !important;
+        color: var(--text) !important;
+        text-transform: uppercase;
+    }
+    /* Hairline rule under the title, in brass — the cartouche divider. */
+    #main-title::after {
+        content: "";
+        display: block;
+        width: 72px;
+        height: 1px;
+        background: var(--brass);
+        margin: 14px 0 12px;
+    }
+    /* Sub-title is the second span inside #title-container. We hide the
+       intervening <br> since the ::after rule handles the break. */
+    #title-container > br { display: none !important; }
+    #title-container > span:last-of-type {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 12.5pt !important;
+        font-weight: 400 !important;
+        color: var(--text-dim) !important;
+        letter-spacing: 0.005em !important;
+        line-height: 1.4 !important;
+        display: block;
+    }
+
+    /* ── Search ─────────────────────────────────────────────────────────── */
+    #search-container {
+        padding: 8px 10px !important;
+    }
+    #text-search {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        color: var(--text) !important;
+        background: var(--ink-3) !important;
+        border: 1px solid var(--rule-strong) !important;
+        border-radius: 3px !important;
+        padding: 8px 12px !important;
+        width: 240px !important;
+        outline: none !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+    }
+    #text-search::placeholder {
+        color: var(--text-faint) !important;
+        font-weight: 400;
+    }
+    #text-search:focus {
+        border-color: var(--cyan) !important;
+        box-shadow: 0 0 0 3px var(--cyan-glow) !important;
+    }
+    /* The Chrome/Safari search-cancel "x" — invert so it shows on dark. */
+    #text-search::-webkit-search-cancel-button { filter: invert(0.85); }
+
+    /* ── Colormap selector ─────────────────────────────────────────────── */
+    #colormap-selector-container {
+        padding: 10px 12px !important;
+    }
+    #selectedColorMapText {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 12.5px !important;
+        font-weight: 500 !important;
+        color: var(--text) !important;
+        letter-spacing: 0.01em;
+    }
+    #colorMapOptions {
+        background: var(--ink-2) !important;
+        border: 1px solid var(--rule) !important;
+        border-radius: 4px !important;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6) !important;
+        padding: 4px !important;
+    }
+    .color-map-text {
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 12px !important;
+        color: var(--text-dim) !important;
+        padding: 6px 10px !important;
+        transition: color 0.1s;
+    }
+    /* DataMapPlot's row-level hover already paints a subtle background on
+       the whole option (palette + label). We only nudge the label color so
+       it brightens slightly — no second background, which read as a confusing
+       "smaller redundant box" inside the row hover. */
+    .color-map-text:hover {
+        color: var(--text) !important;
+    }
+
+    /* ── Legend ─────────────────────────────────────────────────────────── */
+    #legend-container {
+        padding: 12px 14px !important;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    #legend-container::-webkit-scrollbar { width: 6px; }
+    #legend-container::-webkit-scrollbar-thumb {
+        background: var(--rule-strong);
+        border-radius: 3px;
+    }
+    /* No gap between swatch elements — adjacent squares should TOUCH so the
+       palette reads as a single rectangular bar rather than five disconnected
+       dots. The label gets explicit spacing via .color-map-text below. */
+    .color-swatch {
+        color: var(--text-dim) !important;
+        font-family: 'IBM Plex Sans', sans-serif !important;
+        font-size: 11.5px !important;
+        font-weight: 400 !important;
+        padding: 3px 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 0 !important;
+    }
+    .color-swatch:hover { color: var(--text) !important; }
+    /* Sharp-cornered squares match DataMapPlot's default. In the colormap-
+       trigger row and legend list, adjacent squares (gap: 0 above) read as
+       a continuous palette bar — a single visual unit you can scan at a
+       glance. Continuous colormaps like Review Count render as a smooth
+       gradient. Circles or any spacing weakens the "this is a palette"
+       affordance. Sharp corners also fit the cartographic instrument-panel
+       feel of the surrounding chrome. */
+    .color-swatch-box {
+        border-radius: 0 !important;
+        width: 10px !important;
+        height: 10px !important;
+        flex-shrink: 0;
+    }
+
+    /* ── Hover card ────────────────────────────────────────────────────── */
+    /* The card sits inside .deck-tooltip (we zeroed its wrapper styles via
+       tooltip_css above). The card itself paints the dark bg, hairline border,
+       and shadow — this lets the rounded-corner image clip cleanly. */
+    .deck-tooltip {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        max-width: 360px !important;
+        font-family: 'IBM Plex Sans', sans-serif !important;
+    }
+    .hc {
+        background: var(--ink-2);
+        border: 1px solid var(--rule-strong);
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+    }
+    .hc-img-wrap {
+        position: relative;
+        background: var(--ink);
+    }
     .hc-img {
-        width: 100%; height: auto; display: block;
-        aspect-ratio: 460/215; object-fit: cover;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 460 / 215;
+        object-fit: cover;
+        display: block;
     }
-    .hc-body { padding: 12px 14px; }
-    .hc-title { font-weight: 600; font-size: 15px; color: #0d1117; line-height: 1.3; }
-    .hc-tagline { font-size: 13px; font-style: italic; color: #656d76; margin-top: 4px; }
+    /* Subtle vignette at bottom of capsule so title sits cleanly when capsule
+       art is bright at its bottom edge. */
+    .hc-img-wrap::after {
+        content: "";
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        height: 40%;
+        background: linear-gradient(to bottom, transparent, rgba(15, 20, 29, 0.55));
+        pointer-events: none;
+    }
+    .hc-body { padding: 14px 16px 16px; }
+    .hc-title {
+        font-family: 'IBM Plex Sans', sans-serif;
+        font-weight: 600;
+        font-size: 15.5px;
+        line-height: 1.25;
+        letter-spacing: -0.005em;
+        color: var(--text);
+    }
+    .hc-tagline {
+        font-family: 'Fraunces', serif;
+        font-style: italic;
+        font-weight: 400;
+        font-size: 13.5px;
+        line-height: 1.4;
+        color: var(--brass);
+        margin-top: 6px;
+    }
     .hc-tagline:empty { display: none; }
-    .hc-classify { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-    .hc-sentiment, .hc-chip {
-        display: inline-flex; align-items: center;
-        padding: 2px 8px; border-radius: 6px;
-        font-size: 11px; font-weight: 500;
+    .hc-classify {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 12px;
     }
-    .hc-chip { background: rgba(0, 0, 0, 0.05); color: #424a53; }
+    .hc-sentiment, .hc-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: 2px;
+        border: 1px solid transparent;
+        white-space: nowrap;
+    }
+    .hc-sentiment {
+        /* bg/color/border-color come inline from the hover_template; we just
+           shape the chip here. The 1px transparent border above gets recolored
+           to a translucent variant of the sentiment color. */
+    }
+    .hc-chip {
+        background: var(--ink-4);
+        color: var(--text-dim);
+        border-color: var(--rule);
+    }
+    .hc-chip-num {
+        font-variant-numeric: tabular-nums;
+        color: var(--text);
+    }
     .hc-summary {
-        font-size: 12px; line-height: 1.5;
-        color: #3d4752;
-        margin-top: 10px;
-        border-top: 1px solid rgba(0, 0, 0, 0.06);
-        padding-top: 8px;
-        display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical;
+        font-family: 'IBM Plex Sans', sans-serif;
+        font-size: 12.5px;
+        font-weight: 400;
+        line-height: 1.5;
+        color: var(--text-dim);
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--rule);
+        display: -webkit-box;
+        -webkit-line-clamp: 7;
+        -webkit-box-orient: vertical;
         overflow: hidden;
     }
     .hc-summary:empty { display: none; }
+
+    /* ── Loading ────────────────────────────────────────────────────────── */
+    #loading {
+        background: var(--ink) !important;
+        color: var(--text) !important;
+    }
+    .datamapplot-progress-bar {
+        background: var(--ink-3) !important;
+    }
+    .datamapplot-progress-bar-fill {
+        background: var(--cyan) !important;
+    }
+    .datamapplot-progress-bar-text {
+        color: var(--text-dim) !important;
+    }
+    """.replace("__GRAIN_SVG_DATA_URI__", _GRAIN_SVG_DATA_URI)
+
+    # Speed up scroll-zoom — deck.gl's default (0.01) is sluggish for an
+    # exploratory atlas where users want to dive in and out fast.
+    #
+    # KNOWN ISSUE — region labels invisible on initial page load:
+    # DataMapPlot's bundled datamap.js calls waitForFont() but does NOT await
+    # its Promise (line 627), so the labelLayer's SDF GPU texture is built
+    # before the WebFont finishes loading, leaving an empty atlas. The atlas
+    # mapping is correct but the GPU texture upload never happens, and no
+    # amount of script-triggered cloning, addLabels-recreation, setProps, or
+    # explicit redraw rebuilds it. The same code DOES rebuild the texture
+    # when run from the JS devtools console after the page is fully idle
+    # (probably a Chrome user-gesture or rendering-loop interaction we don't
+    # understand). The source-level patches below (font preload + explicit
+    # characterSet) cleanly fix two related bugs in the same area, but the
+    # GPU texture race needs an upstream fix in DataMapPlot/deck.gl.
+    # Workaround for users: paste this into the console after page load:
+    #   const ll=datamap.labelLayer,d=ll.props.data,i=datamap.layers.indexOf(ll);
+    #   const n=ll.clone({id:'lbl',data:[...d]});datamap.layers[i]=n;
+    #   datamap.labelLayer=n;datamap.deckgl.setProps({layers:[...datamap.layers]});
+    custom_js = r"""
+    if (typeof datamap !== 'undefined' && datamap.deckgl) {
+        datamap.deckgl.setProps({controller: {scrollZoom: {speed: 0.05, smooth: true}}});
+    }
     """
 
     fig = datamapplot.create_interactive_plot(
@@ -295,18 +631,71 @@ def main():
         colormap_rawdata=all_rawdata,
         colormap_metadata=all_metadata,
         title=PROJECT_NAME,
-        sub_title=f"{PROJECT_TAGLINE} (top {TARGET_GAME_COUNT:,} most-reviewed)",
+        # The "top 10,000" framing already lives in PROJECT_TAGLINE; the
+        # About page (TODO) will explain what "top 10,000" means precisely
+        # (most-reviewed via FronkonGames). Keeping the cartouche subtitle
+        # short keeps it to one line at the cartouche width.
+        sub_title=PROJECT_TAGLINE,
         enable_search=True,
         custom_css=custom_css,
+        custom_js=custom_js,
         tooltip_css=tooltip_css,
+        # Body / UI font. Title font is overridden in custom_css to Big Shoulders.
         font_family="IBM Plex Sans",
-        darkmode=False,
+        tooltip_font_family="IBM Plex Sans",
+        title_font_size=46,
+        sub_title_font_size=13,
+        font_weight=800,
+        # Dark theme + ink-navy (not pure black) for atmosphere.
+        darkmode=True,
+        background_color="#0a0e15",
     )
     fig.save(str(STEAM_MAP_HTML))
     print(f"Saved interactive map to {STEAM_MAP_HTML}")
 
-    docs_html = Path(STEAM_MAP_HTML).read_text()
-    DOCS_INDEX_HTML.write_text(docs_html)
+    # Two post-render HTML patches; both work around bugs in the bundled
+    # DataMapPlot/deck.gl:
+    #
+    # 1. characterSet:"auto" is treated as the literal 4-char set
+    #    ['a','u','t','o']. Replace with the explicit set computed from the
+    #    label data so every glyph in the region labels can render.
+    # 2. The bundled JS calls waitForFont() but does NOT await it, so the
+    #    SDF font atlas can build before the Google Font finishes loading
+    #    and ends up empty. Move the @import block to a <link> in <head>
+    #    so the font starts loading at parse time, BEFORE deck.gl runs.
+    chars = sorted({c for v in topic_name_vectors for s in v for c in str(s)})
+    explicit_charset = "characterSet:" + json.dumps(chars, ensure_ascii=False)
+    html = Path(STEAM_MAP_HTML).read_text()
+    if 'characterSet:"auto"' not in html:
+        raise RuntimeError(
+            "characterSet:'auto' marker not found in rendered HTML. The "
+            "DataMapPlot template may have changed; update the patch."
+        )
+    html = html.replace('characterSet:"auto"', explicit_charset, 1)
+
+    # Inject font preload + stylesheet links into <head> so the WebFont
+    # finishes loading before the deck.gl bundle starts building its SDF
+    # font atlas. Without this, the atlas is built with a fallback font
+    # (or no font at all) and region labels never appear.
+    font_url = (
+        "https://fonts.googleapis.com/css2?"
+        "family=Big+Shoulders+Display:wght@600;700;800;900&"
+        "family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&"
+        "family=JetBrains+Mono:wght@400;500;600&"
+        "family=Fraunces:ital,opsz,wght@1,12..72,400;1,12..72,500&"
+        "display=block"  # block: wait up to 3s for font, no fallback
+    )
+    head_inject = (
+        '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
+        '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
+        f'<link rel="stylesheet" href="{font_url}">\n'
+    )
+    html = html.replace("</head>", head_inject + "</head>", 1)
+
+    Path(STEAM_MAP_HTML).write_text(html)
+    print(f"Patched labelLayer characterSet ({len(chars)} chars) + font preload")
+
+    DOCS_INDEX_HTML.write_text(html)
     print(f"Copied to {DOCS_INDEX_HTML}")
 
 

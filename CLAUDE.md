@@ -101,6 +101,22 @@ Facet column names in `data/facets.parquet` are derived from facet names in `pip
 
 DataMapPlot generates RGBA columns per colormap (`<field>_r`, `<field>_g`, etc.). Two colormaps using the same `field` name produce duplicate columns and pyarrow raises `ValueError: Duplicate column names found`. The facet schema can rediscover an existing built-in colormap (e.g. the LLM independently proposes "Primary Genre" alongside the existing genre dropdown). Stage 09 prefixes all facet colormap fields with `facet_` to side-step this; the existing built-in genre dropdown was relabeled "Primary Genre (Steam)" so the user can tell the two apart. Don't drop the prefix when refactoring or you'll rediscover this bug as soon as the schema overlaps with a built-in.
 
+### DataMapPlot region-label rendering bugs (stage 09)
+
+The bundled `datamap.js` ships with two latent bugs that bite our dark-theme render. Both have post-render workarounds in `pipeline/09_visualize.py`:
+
+1. **`characterSet:"auto"` is not auto-discovered**. The TextLayer is created with `characterSet:"auto"` but deck.gl in this version consumes the literal string as a 4-character set `['a','u','t','o']` instead of triggering its auto-discovery path. We post-process the rendered HTML to replace it with an explicit array built from the actual region-label data.
+
+2. **`waitForFont()` is called but not awaited** (`datamap.js:627`). The labelLayer is created and its first `updateState` runs before the WebFont finishes loading. The SDF font atlas mapping is correct, but the GPU texture upload silently fails — region labels are present in the data but render as blank boxes. We side-step the *cause* by injecting `<link rel="stylesheet">` for the Google Font into `<head>` so the font finishes loading before deck.gl runs. We have NOT found a reliable in-page workaround for the *symptom*: cloning, addLabels, setProps, redraw, etc. from a `setTimeout` or event handler doesn't rebuild the texture, even though the same code from the JS console does. If labels are missing on initial load, paste this into devtools to fix:
+
+   ```js
+   const ll=datamap.labelLayer,d=ll.props.data,i=datamap.layers.indexOf(ll);
+   const n=ll.clone({id:'lbl',data:[...d]});datamap.layers[i]=n;
+   datamap.labelLayer=n;datamap.deckgl.setProps({layers:[...datamap.layers]});
+   ```
+
+   The proper fix is upstream: make DataMapPlot await `waitForFont` before constructing the TextLayer.
+
 ## Common commands
 
 ```bash
