@@ -1,7 +1,7 @@
 [project]
-name = "steam-map"
+name = "steam-atlas"
 version = "0.1.0"
-description = "Top games on Steam, embedded and laid out as an interactive 2D semantic map"
+description = "Top games on Steam, embedded and laid out as an interactive 2D semantic atlas"
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.28",

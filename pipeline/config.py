@@ -9,8 +9,8 @@ load_dotenv()
 
 # ── Project naming ───────────────────────────────────────────────────────────
 # Single source of truth for the user-facing name. Tweak here when we rename.
-PROJECT_NAME = "Steam Map"
-PROJECT_TAGLINE = "A semantic map of the top 10,000 games on Steam"
+PROJECT_NAME = "Steam Atlas"
+PROJECT_TAGLINE = "A semantic atlas of the top 10,000 games on Steam"
 
 # ── Directories ──────────────────────────────────────────────────────────────
 DATA_DIR = Path("data")
@@ -33,7 +33,7 @@ TOPONYMY_MODEL_JOBLIB = DATA_DIR / "toponymy_model.joblib"
 # stage 07 (reads). Editing this path means breaking that contract.
 FACETS_SCHEMA_JSON = Path(__file__).parent / "facets_schema.json"
 LABELS_PARQUET = DATA_DIR / "labels.parquet"
-STEAM_MAP_HTML = DATA_DIR / "steam_map.html"
+STEAM_ATLAS_HTML = DATA_DIR / "steam_atlas.html"
 ABOUT_HTML = DATA_DIR / "about.html"
 
 DOCS_INDEX_HTML = DOCS_DIR / "index.html"
@@ -59,7 +59,7 @@ STEAM_API_BASE = "https://store.steampowered.com/api"
 STEAM_REQUEST_DELAY_SEC = 1.6
 STEAM_RETRY_BACKOFF_SEC = 60
 STEAM_MAX_RETRIES = 5
-STEAM_USER_AGENT = "steam-map/0.1 (+https://github.com/stevenfazzio/steam-map)"
+STEAM_USER_AGENT = "steam-atlas/0.1 (+https://github.com/stevenfazzio/steam-atlas)"
 STEAM_REGION_CC = "us"
 STEAM_LANG = "english"
 

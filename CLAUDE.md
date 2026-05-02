@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Python data pipeline that produces an interactive 2D semantic map of the top ~10,000 most-reviewed games on Steam, paralleling `../semantic-github-map/`. The final artifact is `docs/index.html` (deployed to GitHub Pages); a local copy lands at `data/steam_map.html`.
+A Python data pipeline that produces an interactive 2D semantic map of the top ~10,000 most-reviewed games on Steam, paralleling `../semantic-github-map/`. The final artifact is `docs/index.html` (deployed to GitHub Pages); a local copy lands at `data/steam_atlas.html`.
 
 The intended audience is data-curious gamers who would wander a map of their hobby. That shapes choices: rich hover (capsule images, sentiment, summary), gamer-flavored taglines, multiple colormap axes, click-to-Steam-store.
 
@@ -40,7 +40,7 @@ candidates.parquet  ->  games.parquet  -+->  embeddings.npz  ->  umap_coords.npz
                                         |                                                  |
                                         +-> facets.parquet (stage 07)                      |
                                         |                                                  |
-                                        +--------------------------------------------------+--> steam_map.html
+                                        +--------------------------------------------------+--> steam_atlas.html
 ```
 
 `games.parquet` is enriched in-place by stages 03 and 04 (they add columns); other stages produce separate files.
@@ -131,7 +131,7 @@ make design-facets     # one-shot: rebuild pipeline/facets_schema.json (rare)
 uv run python pipeline/04_summarize_descriptions.py
 
 # Long-running stages can be detached so they survive the shell:
-nohup uv run python pipeline/01_fetch_tags.py > /tmp/steam-map-fetch-tags.log 2>&1 &
+nohup uv run python pipeline/01_fetch_tags.py > /tmp/steam-atlas-fetch-tags.log 2>&1 &
 
 # Smoke-test a stage with reduced N: temporarily lower TARGET_GAME_COUNT or
 # FETCH_OVERSHOOT_COUNT in pipeline/config.py, run the stage, restore.
@@ -147,7 +147,7 @@ Treat `data/*.parquet` as expensive to regenerate. Never overwrite without a tmp
 
 ## PROJECT_NAME
 
-`PROJECT_NAME` and `PROJECT_TAGLINE` in `pipeline/config.py` are the single source of truth for the user-facing name. The repo directory is `steam-map` as a working name; renaming later should be a one-line change in `config.py`, not a sweep across files. Don't bake the project name into multiple identifiers.
+`PROJECT_NAME` and `PROJECT_TAGLINE` in `pipeline/config.py` drive the user-facing display name (re-run stage 09 to propagate to `data/*.html` and `docs/index.html`). Other places the name lives: `pyproject.toml`'s package name, the repo directory name, `STEAM_USER_AGENT`'s slug, and `STEAM_ATLAS_HTML`'s filename. Don't add more.
 
 ## Required env vars
 

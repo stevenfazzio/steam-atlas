@@ -26,7 +26,7 @@ from config import (
     LABELS_PARQUET,
     PROJECT_NAME,
     PROJECT_TAGLINE,
-    STEAM_MAP_HTML,
+    STEAM_ATLAS_HTML,
     UMAP_COORDS_NPZ,
 )
 
@@ -650,8 +650,8 @@ def main():
         darkmode=True,
         background_color="#0a0e15",
     )
-    fig.save(str(STEAM_MAP_HTML))
-    print(f"Saved interactive map to {STEAM_MAP_HTML}")
+    fig.save(str(STEAM_ATLAS_HTML))
+    print(f"Saved interactive map to {STEAM_ATLAS_HTML}")
 
     # Two post-render HTML patches; both work around bugs in the bundled
     # DataMapPlot/deck.gl:
@@ -665,7 +665,7 @@ def main():
     #    so the font starts loading at parse time, BEFORE deck.gl runs.
     chars = sorted({c for v in topic_name_vectors for s in v for c in str(s)})
     explicit_charset = "characterSet:" + json.dumps(chars, ensure_ascii=False)
-    html = Path(STEAM_MAP_HTML).read_text()
+    html = Path(STEAM_ATLAS_HTML).read_text()
     if 'characterSet:"auto"' not in html:
         raise RuntimeError(
             "characterSet:'auto' marker not found in rendered HTML. The "
@@ -692,7 +692,7 @@ def main():
     )
     html = html.replace("</head>", head_inject + "</head>", 1)
 
-    Path(STEAM_MAP_HTML).write_text(html)
+    Path(STEAM_ATLAS_HTML).write_text(html)
     print(f"Patched labelLayer characterSet ({len(chars)} chars) + font preload")
 
     DOCS_INDEX_HTML.write_text(html)

@@ -3346,7 +3346,7 @@ wheels = [
 ]
 
 [[package]]
-name = "steam-map"
+name = "steam-atlas"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
