@@ -2,7 +2,8 @@
 
 Strips HTML from FronkonGames detailed_description, sends to Haiku, extracts a tagline
 (short noun phrase) and a 2-3 sentence summary. These are used downstream for hover
-tooltips and as input documents to Toponymy / Typologist (cleaner than raw marketing copy).
+tooltips, as input documents to Toponymy (stages 08 and design_facets), and as the text
+the per-game facet labeler reads in stage 07.
 """
 
 import asyncio

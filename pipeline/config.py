@@ -26,8 +26,12 @@ GAMES_PRETRIM_PARQUET = DATA_DIR / "games_pretrim.parquet"
 EMBEDDINGS_NPZ = DATA_DIR / "embeddings.npz"
 UMAP_COORDS_NPZ = DATA_DIR / "umap_coords.npz"
 FACETS_PARQUET = DATA_DIR / "facets.parquet"
-SCHEMA_JSON = DATA_DIR / "schema.json"
 TOPONYMY_MODEL_JOBLIB = DATA_DIR / "toponymy_model.joblib"
+
+# Facet schema lives next to the pipeline scripts, not in DATA_DIR. It is committed
+# to the repo and serves as the contract between design_facets.py (writes) and
+# stage 07 (reads). Editing this path means breaking that contract.
+FACETS_SCHEMA_JSON = Path(__file__).parent / "facets_schema.json"
 LABELS_PARQUET = DATA_DIR / "labels.parquet"
 STEAM_MAP_HTML = DATA_DIR / "steam_map.html"
 ABOUT_HTML = DATA_DIR / "about.html"
@@ -69,8 +73,8 @@ ANTHROPIC_MODEL_SUMMARIZE = "claude-haiku-4-5"
 ANTHROPIC_MODEL_NAMING = "claude-sonnet-4-6"  # Toponymy region naming
 ANTHROPIC_CONCURRENCY = 30
 
-# ── Typologist ───────────────────────────────────────────────────────────────
-TYPOLOGIST_N_FACETS = 3
-TYPOLOGIST_NAMING_MODEL = "claude-haiku-4-5"
-TYPOLOGIST_SCHEMA_MODEL = "claude-opus-4-7"
-TYPOLOGIST_LABELING_MODEL = "claude-haiku-4-5"
+# ── Facet design and labeling ────────────────────────────────────────────────
+# Design is one-shot (Opus, expensive but worth it for schema quality).
+# Labeling is per-game (Haiku, ~10K calls so cost matters).
+FACET_DESIGN_MODEL = "claude-opus-4-7"
+FACET_LABELING_MODEL = "claude-haiku-4-5"

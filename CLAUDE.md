@@ -20,12 +20,14 @@ Ten sequential stages, each a standalone script. Run via `make pipeline` or indi
 04 summarize_descriptions.py  Claude Haiku tagline + 2-3 sent summary  (~$5-10)
 05 embed_descriptions.py      Cohere embed-v4.0, description + top tags (512-dim)
 06 reduce_umap.py             UMAP cosine, n_neighbors=15, min_dist=0.05
-07 induce_facets.py           Typologist with metadata erasure  (~$30-60)
+07 label_facets.py            LLM-per-game label against committed schema (~$5-10)
 08 label_topics.py            Toponymy hierarchical region labels via Claude Sonnet
 09 visualize.py               DataMapPlot interactive HTML, capsule images on hover
 ```
 
 Three logical layers: **data** (00-03), **semantics** (04-06), **labels + render** (07-09).
+
+**Out-of-band: facet schema design.** `pipeline/design_facets.py` is a one-shot script (run via `make design-facets`, NOT in `make pipeline`). It clusters the full-dim embeddings with EVoC, hands the hierarchical Toponymy labels + sample taglines to Opus, and writes `pipeline/facets_schema.json` (committed). Stage 07 reads that schema. Re-run the design step only when you intentionally want a new schema.
 
 `pipeline/config.py` is the central hub. Every stage imports paths and constants from it. Edit `TARGET_GAME_COUNT` / `FETCH_OVERSHOOT_COUNT` there for smoke tests; don't add CLI args.
 
@@ -43,17 +45,21 @@ candidates.parquet  ->  games.parquet  -+->  embeddings.npz  ->  umap_coords.npz
 
 `games.parquet` is enriched in-place by stages 03 and 04 (they add columns); other stages produce separate files.
 
+## Why facet design is out-of-band
+
+Schema discovery (what facets exist, what their values are) is conceptually one-time work. Per-game labeling against an existing schema is per-run work. We split them so the schema becomes a committed artifact and per-run cost is bounded to the labeling pass.
+
+The design step (`pipeline/design_facets.py`) runs Toponymy on the full-dim Cohere embeddings using `EVoCClusterer` (not the 2D UMAP coords used by stage 08). UMAP-to-2D collapses orthogonal axes for layout coherence; facet discovery wants exactly the axes it collapses, so we cluster in the original embedding space. Output is `pipeline/facets_schema.json`, committed.
+
+Stage 07 (`07_label_facets.py`) reads the committed schema and labels each game with one Haiku call returning all facet values as JSON. Resumable, atomic-write checkpointed every 200 rows, mirrors stage 04's pattern.
+
+If `pipeline/facets_schema.json` is absent, stage 07 fails fast with a clear error. Stage 09 already tolerates a missing `data/facets.parquet`, so removing/commenting `07_label_facets.py` from `make pipeline` is the way to skip facets entirely (e.g. on a fresh repo before the design step has been run).
+
 ## Why no fresh appdetails refetch
 
 The original plan included a 5-hour `appdetails` refetch (stage 01) for fresh prices, capsule URLs, descriptions. Dropped after discovering FronkonGames already has all of that. The only thing it doesn't have is the live `review_score_desc` ("Very Positive", "Mixed", etc.), which we recompute locally in stage 03 from `positive` and `negative` counts using Valve's documented bucketing thresholds. Net: ~5 hours saved with no material data loss.
 
 The appdetails fetcher is preserved at `experiments/fetch_appdetails.py` for future use if FronkonGames staleness becomes a problem (currently 3 months behind).
-
-## Why stage 07 is currently skipped at runtime
-
-Stage 07 uses Typologist (the user's own library, `../typologist/`) to discover orthogonal categorical facets via concept erasure. The script and Makefile entry exist, but the user has paused on it pending a facet-design decision (Typologist-discovered vs hand-authored from existing FronkonGames metadata).
-
-Stage 09 is already patched to tolerate missing `data/facets.parquet`, so removing or commenting out the `07_induce_facets.py` line in the Makefile lets the rest of the pipeline run cleanly. To re-enable, just uncomment.
 
 ## Gotchas (learned the hard way)
 
@@ -81,18 +87,15 @@ FronkonGames stores `appid` as **string**. Stages 08 and 07 cast to **int** when
 ### Dependency pins that matter
 
 - **`datasets>=3.0`** in `pyproject.toml`. Without this, uv's resolver picks `datasets==1.1.1` (Sept 2020), which crashes on modern pyarrow's removed `PyExtensionType`. Pulled in transitively via `sentence_transformers`.
-- **`fast-hdbscan==0.2.2`**. `toponymy==0.5.0`'s clustering calls `parallel_boruvka(tree, ...)` without an `n_threads` argument. `fast-hdbscan>=0.3.0` made that argument required, so 0.5.0 + 0.3.x is broken at runtime. We need toponymy 0.5.x for typologist compatibility (typologist requires `toponymy>=0.5.0,<0.6.0`), so pin fast-hdbscan back to 0.2.2 instead.
+- **`fast-hdbscan==0.2.2`**. `toponymy==0.5.0`'s clustering calls `parallel_boruvka(tree, ...)` without an `n_threads` argument. `fast-hdbscan>=0.3.0` made that argument required, so 0.5.0 + 0.3.x is broken at runtime. Pin fast-hdbscan back to 0.2.2 until toponymy 0.6+ is out.
 
 ### Pandas API drift
 
 `Series.clip(min=N)` was renamed in newer pandas. Use `Series.clip(lower=N)`. (Numpy ndarrays' `.clip(min=...)` still works, so check whether you're holding a Series or an ndarray.)
 
-### Typologist 0.0.1 API differs from its README
+### Schema and parquet column lifecycle in stage 07
 
-- The README shows `from typologist import AnthropicLLM`. The published 0.0.1 wheel has **no public `AnthropicLLM` class**.
-- Actual API: `Typologist(naming_llm="claude-haiku-4-5", schema_llm="claude-opus-4-7", labeling_llm="claude-haiku-4-5", ...)`. LLM args are bare model-name strings; the library resolves them via internal `_resolve_llm`.
-- `metadata=` accepts a `pd.DataFrame` of categorical columns; the library one-hot encodes them automatically before LEACE.
-- Read the actual source under `.venv/lib/python3.11/site-packages/typologist/` if behavior surprises you, since the README documents an aspirational API.
+Facet column names in `data/facets.parquet` are derived from facet names in `pipeline/facets_schema.json` via `re.sub(r"[^a-zA-Z0-9]+", "_", name).lower()`. If the schema is re-designed (renamed or different facets), stage 07 detects the column-set mismatch and discards the prior parquet entirely on the next run. There is no migration path, just a clean rebuild. Re-running the design step is therefore a destructive op for any partial labeling progress.
 
 ## Common commands
 
@@ -102,6 +105,7 @@ make lint              # ruff check + ruff format --check
 make format            # ruff format
 make test              # pytest (no tests authored yet)
 make pipeline          # run all stages in sequence
+make design-facets     # one-shot: rebuild pipeline/facets_schema.json (rare)
 
 # Run a single stage (config.py paths cascade naturally):
 uv run python pipeline/04_summarize_descriptions.py
@@ -115,7 +119,7 @@ nohup uv run python pipeline/01_fetch_tags.py > /tmp/steam-map-fetch-tags.log 2>
 
 ## Resumability and atomic writes
 
-Stages 01 (SteamSpy) and 04 (Haiku) are resumable: rerunning skips rows already present in `games.parquet`. Both checkpoint every N rows (100 for 01, 200 for 04) via atomic tmp+rename, so a kill mid-run leaves a consistent partial file.
+Stages 01 (SteamSpy), 04 (Haiku summary), and 07 (Haiku facet labels) are resumable: rerunning skips rows already present in their output. All three checkpoint every N rows (100 for 01, 200 for 04 and 07) via atomic tmp+rename, so a kill mid-run leaves a consistent partial file.
 
 Stage 02 backs up `games.parquet` to `games_pretrim.parquet` before trimming. Stage 04 writes a `.bak` copy of `games.parquet` before its first batch.
 
@@ -129,18 +133,17 @@ Treat `data/*.parquet` as expensive to regenerate. Never overwrite without a tmp
 
 In `.env` (loaded by `python-dotenv` in `config.py`):
 
-- `ANTHROPIC_API_KEY`: stages 04, 07, 08
-- `CO_API_KEY`: stages 05, 08
+- `ANTHROPIC_API_KEY`: stages 04, 07, 08, and `design_facets.py`
+- `CO_API_KEY`: stages 05, 08, and `design_facets.py`
 
 Stages 00, 01, 02, 03, 06, 09 need no external auth (FronkonGames is a public HF parquet, SteamSpy is unauthenticated).
 
 ## Stage 09 (visualize) is currently minimum-viable
 
-Stage 09 is roughly 250 lines vs github-map's 1400+. It has: capsule images on hover, Toponymy region labels at multiple zoom levels, click-to-Steam, search by name, and 5 colormaps (sentiment, genre, F2P, review count, plus one per Typologist facet when stage 07 has run).
+Stage 09 is roughly 250 lines vs github-map's 1400+. It has: capsule images on hover, Toponymy region labels at multiple zoom levels, click-to-Steam, search by name, and 4+ colormaps (sentiment, genre, F2P, review count, plus one per facet when stage 07 has run).
 
 Not yet ported from github-map: mobile-specific UI, custom filter panel beyond DataMapPlot's built-in colormap dropdown, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags, Plausible analytics. `../semantic-github-map/pipeline/07_visualize.py` is the reference when adding these.
 
 ## Sibling repos
 
-- `../semantic-github-map/`: the parallel project for GitHub repos. Same skeleton; the atomic-write, resumability, two-phase fetch, Toponymy + DataMapPlot wiring patterns were lifted directly from there.
-- `../typologist/`: the user's own library, used in stage 07. Alpha 0.0.1; expect rough edges and API churn between releases.
+- `../semantic-github-map/`: the parallel project for GitHub repos. Same skeleton; the atomic-write, resumability, two-phase fetch, Toponymy + DataMapPlot wiring patterns were lifted directly from there. Note that github-map hand-authors its facet schema (`PROJECT_TYPES`, `TARGET_AUDIENCES` constants in `03_summarize_readmes.py`) and folds per-game labeling into stage 03's existing summary call; we instead discover the schema via clustering (`design_facets.py`) and label in a dedicated stage 07.

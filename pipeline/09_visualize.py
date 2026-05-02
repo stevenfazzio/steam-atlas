@@ -1,14 +1,16 @@
 """Render the interactive 2D Steam map via DataMapPlot.
 
-Composes UMAP coords + Toponymy region labels + raw FronkonGames metadata + Typologist
-facets into an interactive HTML page with capsule images on hover, multiple colormap
-dropdowns, and click-to-open-Steam-store.
+Composes UMAP coords + Toponymy region labels + raw FronkonGames metadata + per-game
+facet labels into an interactive HTML page with capsule images on hover, multiple
+colormap dropdowns, and click-to-open-Steam-store.
 
 This is a v1 minimum-viable version. Polish (edge bundling, mobile-specific UI, custom
 filter panel, point-level text labels at zoom, hand-authored About page) comes in later
 iterations once the basic map is verified.
 """
 
+import json
+import re
 from html import escape
 from pathlib import Path
 
@@ -19,6 +21,7 @@ import pandas as pd
 from config import (
     DOCS_INDEX_HTML,
     FACETS_PARQUET,
+    FACETS_SCHEMA_JSON,
     GAMES_PARQUET,
     LABELS_PARQUET,
     PROJECT_NAME,
@@ -27,6 +30,11 @@ from config import (
     TARGET_GAME_COUNT,
     UMAP_COORDS_NPZ,
 )
+
+
+def _facet_slug(facet_name: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9]+", "_", facet_name).strip("_").lower()
+
 
 SENTIMENT_COLORS = {
     "Overwhelmingly Positive": "#1f8b4c",
@@ -80,10 +88,10 @@ def main():
         facets_df = pd.read_parquet(FACETS_PARQUET)
         facets_df["appid"] = facets_df["appid"].astype(int)
         df = df.merge(facets_df, on="appid", how="left")
-        print(f"  + Typologist facets: {[c for c in facets_df.columns if c != 'appid']}")
+        print(f"  + Facet colormaps: {[c for c in facets_df.columns if c != 'appid']}")
     else:
         facets_df = None
-        print("  (no facets.parquet; skipping Typologist colormaps)")
+        print("  (no facets.parquet; skipping facet colormaps)")
 
     label_columns = sorted(c for c in df.columns if c.startswith("label_layer_"))
     topic_name_vectors = [df[c].fillna("").values for c in label_columns]
@@ -173,7 +181,7 @@ def main():
     all_metadata.append(
         {
             "field": "primary_genre",
-            "description": "Primary Genre",
+            "description": "Primary Genre (Steam)",
             "kind": "categorical",
             "color_mapping": genre_map,
         }
@@ -203,8 +211,22 @@ def main():
         }
     )
 
-    # Typologist facets, one colormap each (skipped when facets.parquet absent)
-    facet_cols = [c for c in facets_df.columns if c != "appid"] if facets_df is not None else []
+    # Per-game facets, one colormap each (skipped when facets.parquet absent).
+    # The _other suffixed columns hold freeform labels for games in the Other
+    # bucket; they are debug/iteration data, not categorical colormaps.
+    # Field names are prefixed with `facet_` to avoid colliding with the
+    # built-in colormaps above (e.g. the facet schema may rediscover Primary Genre).
+    # Descriptions come from the schema's facet name when available so the dropdown
+    # shows "Primary Genre" rather than the slug-derived "Primary Genre".
+    facet_cols = (
+        [c for c in facets_df.columns if c != "appid" and not c.endswith("_other")] if facets_df is not None else []
+    )
+    if facet_cols and FACETS_SCHEMA_JSON.exists():
+        with open(FACETS_SCHEMA_JSON) as f:
+            schema = json.load(f)
+        slug_to_name = {_facet_slug(facet["name"]): facet["name"] for facet in schema}
+    else:
+        slug_to_name = {}
     for col in facet_cols:
         values = df[col].fillna("Other").astype(str).values
         unique_vals = sorted(set(values))
@@ -213,8 +235,8 @@ def main():
         all_rawdata.append(values)
         all_metadata.append(
             {
-                "field": col,
-                "description": col.replace("_", " ").title(),
+                "field": f"facet_{col}",
+                "description": slug_to_name.get(col, col.replace("_", " ").title()),
                 "kind": "categorical",
                 "color_mapping": cmap,
             }

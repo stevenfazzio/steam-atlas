@@ -407,18 +407,6 @@ wheels = [
 ]
 
 [[package]]
-name = "concept-erasure"
-version = "0.2.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "torch" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/33/e2b5ad6331faa1fc6441c4d48c8c59013da126b2aa61ae299cf4529b8e26/concept-erasure-0.2.4.tar.gz", hash = "sha256:3f2a8f3a9713c7a906c4013b1d94594ca588af7124f04541ca6b4ea72f04ce90", size = 24999 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/3f/859285794eba7e6d215e2bdf1ff81eb957b69a6c30577cf04e64782d4411/concept_erasure-0.2.4-py3-none-any.whl", hash = "sha256:a7665b49d97c6aa3bfd504ca724ef460bb61237aa510ae31e9550de8619806af", size = 25691 },
-]
-
-[[package]]
 name = "contourpy"
 version = "1.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -3362,9 +3350,11 @@ name = "steam-map"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "anthropic" },
     { name = "cohere" },
     { name = "datamapplot" },
     { name = "datasets" },
+    { name = "evoc" },
     { name = "fast-hdbscan" },
     { name = "glasbey" },
     { name = "huggingface-hub" },
@@ -3377,8 +3367,8 @@ dependencies = [
     { name = "requests" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
+    { name = "toponymy" },
     { name = "tqdm" },
-    { name = "typologist" },
     { name = "umap-learn" },
 ]
 
@@ -3391,9 +3381,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anthropic", specifier = ">=0.30" },
     { name = "cohere", specifier = ">=5.0" },
     { name = "datamapplot", specifier = ">=0.5" },
     { name = "datasets", specifier = ">=3.0" },
+    { name = "evoc", specifier = ">=0.1.3" },
     { name = "fast-hdbscan", specifier = "==0.2.2" },
     { name = "glasbey", specifier = ">=0.2" },
     { name = "huggingface-hub", specifier = ">=0.20" },
@@ -3409,8 +3401,8 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14" },
     { name = "scikit-learn", specifier = ">=1.2" },
     { name = "sentence-transformers", specifier = ">=3.0" },
+    { name = "toponymy", specifier = ">=0.5,<0.6" },
     { name = "tqdm", specifier = ">=4.60" },
-    { name = "typologist", extras = ["anthropic"], specifier = ">=0.0.1" },
     { name = "umap-learn", specifier = ">=0.5.10" },
 ]
 provides-extras = ["dev"]
@@ -3711,26 +3703,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/55/e3/70399cb7dd41c10ac53367ae42139cf4b1ca5f36bb3dc6c9d33acdb43655/typing_inspection-0.4.2.tar.gz", hash = "sha256:ba561c48a67c5958007083d386c3295464928b01faa735ab8547c5692e87f464", size = 75949 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl", hash = "sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7", size = 14611 },
-]
-
-[[package]]
-name = "typologist"
-version = "0.0.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anthropic" },
-    { name = "concept-erasure" },
-    { name = "evoc" },
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "tokenizers" },
-    { name = "toponymy" },
-    { name = "torch" },
-    { name = "transformers" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/70/eb/740141d13123dabeb9551e5ad04cfb26ed212a3f406bf5ecdc7cc4ea47c9/typologist-0.0.1.tar.gz", hash = "sha256:a6e0aedf1762cdef147a62a199eac1eddce3300747f0514cbdbaf798b42df98d", size = 188882 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/16/bcfafafb1078a3edf9fb151223612b020c8b4eead4ad6ad15f6d262fb7ec/typologist-0.0.1-py3-none-any.whl", hash = "sha256:e3d68d556963c263cce553a34c6737fae21680d9c890001e9eaffe46dbf85fe8", size = 15315 },
 ]
 
 [[package]]

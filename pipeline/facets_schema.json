@@ -1,0 +1,180 @@
+[
+  {
+    "name": "Primary Genre",
+    "description": "The dominant gameplay genre that best characterizes the game's core mechanics.",
+    "values": [
+      {
+        "name": "Shooter",
+        "description": "FPS, TPS, battle royale, or tactical military combat games where shooting is the core action."
+      },
+      {
+        "name": "RPG",
+        "description": "Role-playing games including JRPGs, CRPGs, action-RPGs, and roguelite RPGs with character progression and stats."
+      },
+      {
+        "name": "Strategy & Management",
+        "description": "4X, grand strategy, RTS, tycoon, city-builders, and management/business sims."
+      },
+      {
+        "name": "Simulation",
+        "description": "Vehicle, life, farming, job, or sandbox simulators focused on emulating an activity or system."
+      },
+      {
+        "name": "Action & Platformer",
+        "description": "Action-adventure, fighting games, metroidvanias, platformers, and hack-and-slash titles."
+      },
+      {
+        "name": "Puzzle & Party",
+        "description": "Puzzle games, party brawlers, physics chaos games, and minigame collections."
+      },
+      {
+        "name": "Narrative & Adventure",
+        "description": "Visual novels, point-and-click adventures, walking sims, and story-driven exploration games."
+      },
+      {
+        "name": "Survival & Sandbox",
+        "description": "Survival crafting, sandbox builders, and open-ended exploration/extraction games."
+      },
+      {
+        "name": "Other",
+        "description": "None of the above values clearly fit. When picking Other, also provide a 2-5 word phrase in the corresponding _other field describing what would actually fit (e.g., 'rhythm game', 'visual novel-music hybrid')."
+      }
+    ]
+  },
+  {
+    "name": "Setting & Aesthetic",
+    "description": "The fictional world, era, or cultural style the game evokes.",
+    "values": [
+      {
+        "name": "Contemporary Real-World",
+        "description": "Modern-day Earth settings: cities, jobs, sports, cars, and present-day military scenarios."
+      },
+      {
+        "name": "Historical",
+        "description": "Set in a specific real historical period such as WWII, ancient Rome, medieval Europe, or the Cold War."
+      },
+      {
+        "name": "High Fantasy",
+        "description": "Western fantasy realms with magic, dragons, dungeons, and medieval-style worlds."
+      },
+      {
+        "name": "Sci-Fi & Space",
+        "description": "Futuristic, cyberpunk, space exploration, or alien-world settings."
+      },
+      {
+        "name": "Anime & East Asian",
+        "description": "Japanese, Chinese, or Korean-inspired worlds: wuxia, samurai, anime aesthetics, and JRPG fantasy."
+      },
+      {
+        "name": "Horror & Dark Atmospheric",
+        "description": "Gothic, post-apocalyptic, dystopian, haunted, or psychological horror settings."
+      },
+      {
+        "name": "Cozy & Whimsical",
+        "description": "Cute, pastoral, cartoony, or lighthearted worlds like farms, slime ranches, and party-game arenas."
+      },
+      {
+        "name": "Abstract & Stylized",
+        "description": "Non-representational, geometric, retro-pixel, or tool/utility apps without a concrete setting."
+      },
+      {
+        "name": "Other",
+        "description": "None of the above values clearly fit. When picking Other, also provide a 2-5 word phrase in the corresponding _other field describing what would actually fit (e.g., 'mythology-Pacific Islander', 'cosmic horror underwater')."
+      }
+    ]
+  },
+  {
+    "name": "Player Mode",
+    "description": "Whether the game is built primarily for solo play, multiplayer, or both.",
+    "values": [
+      {
+        "name": "Single-Player Focused",
+        "description": "Designed primarily as a solo experience with little or no multiplayer component."
+      },
+      {
+        "name": "Co-op Friendly",
+        "description": "Single-player or story-driven games that prominently support cooperative play with friends."
+      },
+      {
+        "name": "Competitive Multiplayer",
+        "description": "PvP-centric games like shooters, fighting games, MOBAs, and competitive sports titles."
+      },
+      {
+        "name": "Massively Multiplayer",
+        "description": "MMOs, large-scale battle royales, and persistent-world games supporting many simultaneous players."
+      },
+      {
+        "name": "Local & Party",
+        "description": "Designed around couch co-op, party play, or chaotic same-screen multiplayer."
+      },
+      {
+        "name": "Other",
+        "description": "None of the above values clearly fit. When picking Other, also provide a 2-5 word phrase in the corresponding _other field describing what would actually fit (e.g., 'asynchronous PvP', 'spectator only', 'not a game')."
+      }
+    ]
+  },
+  {
+    "name": "Pacing & Intensity",
+    "description": "The typical moment-to-moment tempo and stress level of play.",
+    "values": [
+      {
+        "name": "Twitchy & Action-Packed",
+        "description": "Fast reflexes, real-time combat, bullet hell, or high-APM gameplay."
+      },
+      {
+        "name": "Tense & Suspenseful",
+        "description": "Horror, hardcore survival, or stealth games where dread and high stakes dominate."
+      },
+      {
+        "name": "Tactical & Deliberate",
+        "description": "Turn-based, strategic, or methodical games rewarding careful planning over reflexes."
+      },
+      {
+        "name": "Steady & Progression-Driven",
+        "description": "RPGs, sims, and builders with continuous moderate-pace activity and long-term goals."
+      },
+      {
+        "name": "Relaxed & Cozy",
+        "description": "Low-pressure games meant to soothe: farming, ranching, walking sims, casual puzzles."
+      },
+      {
+        "name": "Chaotic & Silly",
+        "description": "Slapstick physics, party games, and absurdist sandboxes built around hilarity over challenge."
+      },
+      {
+        "name": "Other",
+        "description": "None of the above values clearly fit. When picking Other, also provide a 2-5 word phrase in the corresponding _other field describing what would actually fit (e.g., 'meditative ambient', 'rhythm-locked tempo')."
+      }
+    ]
+  },
+  {
+    "name": "Session Structure",
+    "description": "How a typical play session is shaped and what players take away from it.",
+    "values": [
+      {
+        "name": "Linear Campaign",
+        "description": "Story-driven games with a defined beginning, middle, and end played through once or twice."
+      },
+      {
+        "name": "Open-World Exploration",
+        "description": "Large persistent worlds where players freely roam, quest, and discover at their own pace."
+      },
+      {
+        "name": "Run-Based Roguelike",
+        "description": "Short repeatable runs with permadeath, procedural generation, and meta-progression."
+      },
+      {
+        "name": "Match-Based Sessions",
+        "description": "Discrete rounds or matches like shooters, sports, fighting, and party games."
+      },
+      {
+        "name": "Sandbox & Creative",
+        "description": "Open-ended building, crafting, or simulation with no fixed endpoint or win condition."
+      },
+      {
+        "name": "Other",
+        "description": "None of the above values clearly fit. When picking Other, also provide a 2-5 word phrase in the corresponding _other field describing what would actually fit (e.g., 'episodic releases', 'live-service seasons')."
+      }
+    ]
+  }
+]

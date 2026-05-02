@@ -1,4 +1,4 @@
-.PHONY: install lint format test pipeline clean
+.PHONY: install lint format test pipeline design-facets clean
 
 install:
 	uv sync --extra dev
@@ -20,9 +20,14 @@ pipeline:
 	uv run python pipeline/04_summarize_descriptions.py
 	uv run python pipeline/05_embed_descriptions.py
 	uv run python pipeline/06_reduce_umap.py
-	uv run python pipeline/07_induce_facets.py
+	uv run python pipeline/07_label_facets.py
 	uv run python pipeline/08_label_topics.py
 	uv run python pipeline/09_visualize.py
+
+# One-shot facet schema discovery. Not part of `make pipeline` because the schema
+# is committed; rerun only when you intentionally want a new schema.
+design-facets:
+	uv run python pipeline/design_facets.py
 
 clean:
 	@echo "This will remove all files in data/. Press Ctrl+C to cancel."
