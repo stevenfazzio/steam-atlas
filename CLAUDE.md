@@ -97,6 +97,10 @@ FronkonGames stores `appid` as **string**. Stages 08 and 07 cast to **int** when
 
 Facet column names in `data/facets.parquet` are derived from facet names in `pipeline/facets_schema.json` via `re.sub(r"[^a-zA-Z0-9]+", "_", name).lower()`. If the schema is re-designed (renamed or different facets), stage 07 detects the column-set mismatch and discards the prior parquet entirely on the next run. There is no migration path, just a clean rebuild. Re-running the design step is therefore a destructive op for any partial labeling progress.
 
+### Facet field-name collisions in stage 09
+
+DataMapPlot generates RGBA columns per colormap (`<field>_r`, `<field>_g`, etc.). Two colormaps using the same `field` name produce duplicate columns and pyarrow raises `ValueError: Duplicate column names found`. The facet schema can rediscover an existing built-in colormap (e.g. the LLM independently proposes "Primary Genre" alongside the existing genre dropdown). Stage 09 prefixes all facet colormap fields with `facet_` to side-step this; the existing built-in genre dropdown was relabeled "Primary Genre (Steam)" so the user can tell the two apart. Don't drop the prefix when refactoring or you'll rediscover this bug as soon as the schema overlaps with a built-in.
+
 ## Common commands
 
 ```bash
