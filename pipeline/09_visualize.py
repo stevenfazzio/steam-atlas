@@ -50,13 +50,13 @@ _GRAIN_SVG_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/200
 # Dict order is the legend order (most positive at top); preserve it.
 SENTIMENT_COLORS = {
     "Overwhelmingly Positive": "#1a9850",  # dark green
-    "Very Positive": "#66bd63",            # mid green
-    "Positive": "#a6d96a",                 # light green
-    "Mostly Positive": "#d9ef8b",          # pale yellow-green
-    "Mixed": "#ffffbf",                    # pale yellow (midpoint)
-    "Mostly Negative": "#fee08b",          # pale yellow-orange
-    "Negative": "#fdae61",                 # orange
-    "Very Negative": "#f46d43",            # red-orange
+    "Very Positive": "#66bd63",  # mid green
+    "Positive": "#a6d96a",  # light green
+    "Mostly Positive": "#d9ef8b",  # pale yellow-green
+    "Mixed": "#ffffbf",  # pale yellow (midpoint)
+    "Mostly Negative": "#fee08b",  # pale yellow-orange
+    "Negative": "#fdae61",  # orange
+    "Very Negative": "#f46d43",  # red-orange
     "Overwhelmingly Negative": "#d73027",  # red
     "Too Few Reviews": "#7a8190",
     "No User Reviews": "#5a6172",

@@ -31,6 +31,7 @@ dev = [
     "ruff>=0.14",
     "pre-commit>=4.0",
     "pytest>=8.0",
+    "plotly>=5.20",
 ]
 
 [tool.pytest.ini_options]

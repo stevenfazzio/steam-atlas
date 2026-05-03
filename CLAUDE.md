@@ -69,7 +69,18 @@ Source: `https://huggingface.co/datasets/FronkonGames/steam-games-dataset` (last
 
 - Column is `appID` (capital ID). Stage 00 normalizes to lowercase `appid`.
 - The `tags` column exists in the schema but is **empty for every row**. Don't trust it. Use SteamSpy (stage 01).
+- The `movies` column is also **empty for every row**, so any "has trailer" derived signal will be all zeros. Don't bother.
 - There is no `is_free` field. Free-to-play check: `price == 0` (where `price` is a float, USD).
+- The `genres` field carries near-zero variance: roughly 2.8 entries per game across the entire catalog regardless of size, popularity, or genre. Useless as a filter or colormap-bucketing axis on its own. The facet schema (stage 07) is the right cut for genre-like structure.
+
+### SteamSpy playtime fields are unreliable
+
+The `*_playtime_forever` and `*_playtime_2weeks` fields (carried through from SteamSpy via FronkonGames) have two failure modes that make them unsafe to colormap or filter on without substantial post-processing:
+
+1. **Missing data on major popular games.** A surprising number of top-10k games show `median_playtime_forever = 0` AND `average_playtime_forever = 0`, including Portal 2 (155k reviews), Civilization V (140k), Half-Life 2 episodes, R6 Siege, and Black Ops III. This is not "median owner never played" — it's SteamSpy losing tracking, almost certainly fallout from Steam's 2018 Web API tightening that broke its owner-counting methodology. Don't interpret `playtime = 0` as "low engagement" without checking the rest of the row; a `0` next to hundreds of thousands of reviews is missing data.
+2. **Background-app inflation at the top.** Steam's playtime counter measures "minutes the app was running," not "minutes the user was actively engaged." The top of `median_playtime_forever` is dominated by wallpaper engines (RainWallpaper), audio utilities (Boom 3D), Twitch chat overlays (RutonyChat), VR overlays (XSOverlay), video editors (VEGAS Pro 18 Edit Steam Edition), idle clickers (Fish Idle 2), and adult VNs that get left running for Steam trading card farming. Real RPG/strategy/sandbox games sit in the middle of the gradient, not the top.
+
+Documented unit/horizon (from SteamSpy's API page and the FronkonGames README): values are integer **minutes**; `forever` means "since March 11, 2009" (when Steam started tracking playtime); the population is owners (sample-based, public profiles only). See `experiments/analyze_review_signals.py` for the analysis behind these findings.
 
 ### SteamSpy tag dict structure
 
