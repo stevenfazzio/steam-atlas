@@ -41,20 +41,23 @@ def _facet_slug(facet_name: str) -> str:
 _GRAIN_SVG_DATA_URI = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"  # noqa: E501
 
 
-# Diverging palette tuned for legibility on the dark page background.
-# The original light-mode palette used deep greens (#1f8b4c) that turn muddy
-# on near-black; here we shift toward more luminous, slightly desaturated
-# values so the chips read clearly inside the hover card.
+# ColorBrewer 9-class RdYlGn (diverging). Aligns with Steam's green-for-positive
+# convention; pale yellow midpoint at Mixed ramps out to saturated red at
+# Overwhelmingly Negative and saturated dark green at Overwhelmingly Positive.
+# Adjacent tiers stay adjacent in color space (no jumps between Mostly Positive
+# and Mixed).
+#
+# Dict order is the legend order (most positive at top); preserve it.
 SENTIMENT_COLORS = {
-    "Overwhelmingly Positive": "#7ee16e",
-    "Very Positive": "#5ecc4d",
-    "Mostly Positive": "#4ba83b",
-    "Positive": "#3a8530",
-    "Mixed": "#e6b94a",
-    "Mostly Negative": "#e69661",
-    "Negative": "#d5685a",
-    "Very Negative": "#b94545",
-    "Overwhelmingly Negative": "#8a2e2e",
+    "Overwhelmingly Positive": "#1a9850",  # dark green
+    "Very Positive": "#66bd63",            # mid green
+    "Positive": "#a6d96a",                 # light green
+    "Mostly Positive": "#d9ef8b",          # pale yellow-green
+    "Mixed": "#ffffbf",                    # pale yellow (midpoint)
+    "Mostly Negative": "#fee08b",          # pale yellow-orange
+    "Negative": "#fdae61",                 # orange
+    "Very Negative": "#f46d43",            # red-orange
+    "Overwhelmingly Negative": "#d73027",  # red
     "Too Few Reviews": "#7a8190",
     "No User Reviews": "#5a6172",
 }
@@ -173,8 +176,11 @@ def main():
     all_rawdata = []
     all_metadata = []
 
-    # Sentiment
-    unique_sentiments = sorted(set(sentiment_col), key=lambda s: (s not in SENTIMENT_COLORS, s))
+    # Sentiment legend order follows SENTIMENT_COLORS (most positive -> most negative).
+    # Any unexpected values land at the end alphabetically.
+    sentiments_in_data = set(sentiment_col)
+    unique_sentiments = [s for s in SENTIMENT_COLORS if s in sentiments_in_data]
+    unique_sentiments += sorted(sentiments_in_data - set(SENTIMENT_COLORS))
     sentiment_color_map = {s: SENTIMENT_COLORS.get(s, "#999999") for s in unique_sentiments}
     all_rawdata.append(sentiment_col)
     all_metadata.append(
