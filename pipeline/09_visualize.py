@@ -130,8 +130,10 @@ def main():
     appids = df["appid"].astype(int).values
     store_urls = np.array([_store_url(a) for a in appids])
 
-    # Marker sizes: sqrt(reviews), normalized
-    raw = np.sqrt(df["total_reviews"].values.astype(float).clip(min=1))
+    # Marker sizes: log10(reviews), normalized. Log puts equal visual weight on
+    # each order of magnitude, which matches Steam's log-normal review distribution
+    # better than sqrt (which collapsed everything but CS2 to the floor).
+    raw = np.log10(df["total_reviews"].values.astype(float).clip(min=1))
     marker_sizes = 3 + 12 * (raw - raw.min()) / max(raw.max() - raw.min(), 1)
 
     # Sentiment chip uses the per-row sentiment_color twice: as a glowing tinted
