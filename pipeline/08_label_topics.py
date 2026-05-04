@@ -5,9 +5,13 @@ into a hierarchy of clusters and asks an LLM to name each one. The output is a p
 label at multiple zoom levels, fed to DataMapPlot's `label_layers=` for the floating
 region names on the map.
 
-Documents are the name+tagline+summary text (cleaner than raw descriptions for the
-LLM to reason about cluster identity).
+Documents are name + tagline + detailed_description (HTML-stripped). The Haiku-distilled
+summary is intentionally NOT used: ablation showed it costs label quality vs the source
+text. See experiments/ablate_detailed_vs_summary.py and CLAUDE.md "Text-source strategy".
 """
+
+import html
+import re
 
 import joblib
 
@@ -35,22 +39,35 @@ from config import (  # noqa: E402
     UMAP_COORDS_NPZ,
 )
 
+MAX_DOC_CHARS = 6_000
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _strip_html(s: str) -> str:
+    if not s:
+        return ""
+    text = HTML_TAG_RE.sub(" ", s)
+    text = html.unescape(text)
+    return WHITESPACE_RE.sub(" ", text).strip()
+
 
 def _build_documents(df: pd.DataFrame) -> list[str]:
-    """Name - tagline + summary per game. Falls back to raw short_description if missing."""
+    """Name + tagline + HTML-stripped detailed_description, capped at MAX_DOC_CHARS."""
     docs = []
     for _, row in df.iterrows():
         name = (row.get("name") or "").strip()
         tagline = (row.get("tagline") or "").strip()
-        summary = (row.get("summary") or "").strip()
-        if tagline and summary:
-            text = f"{name} - {tagline}\n{summary}"
-        elif summary:
-            text = f"{name}\n{summary}"
+        detailed = _strip_html(row.get("detailed_description") or "")
+        if tagline and detailed:
+            text = f"{name} - {tagline}\n{detailed}"
+        elif detailed:
+            text = f"{name}\n{detailed}"
+        elif tagline:
+            text = f"{name} - {tagline}"
         else:
-            short = (row.get("short_description") or "").strip()
-            text = f"{name}\n{short}" if short else name
-        docs.append(text)
+            text = name
+        docs.append(text[:MAX_DOC_CHARS])
     return docs
 
 

@@ -5,6 +5,11 @@ per game) to assign each game to a value of each facet, writes data/facets.parqu
 keyed by appid with one column per facet plus one <facet>_other column for the
 freeform label when a game lands in the schema's Other bucket.
 
+Input text is name + tagline + detailed_description (HTML-stripped). The summary
+column is intentionally NOT used here: it's a Haiku-distilled rewrite for hovercard
+display, and ablation showed using the source text instead lifts label quality on
+~50% of disagreements. See experiments/ablate_detailed_vs_summary.py.
+
 Resumable: rerunning skips appids already labeled. If the schema has changed since
 the prior run, the existing parquet is discarded and labeling restarts from scratch.
 Checkpoints atomically every CHECKPOINT_EVERY rows so a kill mid-run leaves a
@@ -12,6 +17,7 @@ consistent partial file.
 """
 
 import asyncio
+import html
 import json
 import os
 import re
@@ -31,8 +37,19 @@ from tqdm import tqdm
 
 CHECKPOINT_EVERY = 200
 MAX_RETRIES = 5
-MAX_TEXT_CHARS = 1_500
+MAX_TEXT_CHARS = 6_000
 OTHER_VALUE = "Other"
+
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+WHITESPACE_RE = re.compile(r"\s+")
+
+
+def strip_html(s: str) -> str:
+    if not s:
+        return ""
+    text = HTML_TAG_RE.sub(" ", s)
+    text = html.unescape(text)
+    return WHITESPACE_RE.sub(" ", text).strip()
 
 
 def _field_name(facet_name: str) -> str:
@@ -61,7 +78,10 @@ def _build_system_prompt(schema: list[dict]) -> str:
     response_schema = "\n".join(response_lines)
 
     return (
-        "You will receive a Steam game's name, tagline, and short summary. "
+        "You will receive a Steam game's name, tagline, and the full Steam store "
+        "description text. The description is editorial copy and may contain marketing "
+        "language, press quotes, or franchise pitches; focus on what the game itself "
+        "actually does and is, not promotional framing. "
         "Classify it on each of the categorical facets below. For every facet, "
         "pick the single value that best fits. If a value clearly applies, pick it. "
         f'If no value clearly fits, pick "{OTHER_VALUE}" and provide a 2-5 word phrase '
@@ -75,11 +95,13 @@ def _build_system_prompt(schema: list[dict]) -> str:
 def _build_text(row) -> str:
     name = (row.get("name") or "").strip()
     tagline = (row.get("tagline") or "").strip()
-    summary = (row.get("summary") or "").strip()
-    if tagline and summary:
-        text = f"Name: {name}\nTagline: {tagline}\nSummary: {summary}"
-    elif summary:
-        text = f"Name: {name}\nSummary: {summary}"
+    detailed = strip_html(row.get("detailed_description") or "")
+    if tagline and detailed:
+        text = f"Name: {name}\nTagline: {tagline}\nDescription: {detailed}"
+    elif detailed:
+        text = f"Name: {name}\nDescription: {detailed}"
+    elif tagline:
+        text = f"Name: {name}\nTagline: {tagline}"
     else:
         text = f"Name: {name}"
     return text[:MAX_TEXT_CHARS]

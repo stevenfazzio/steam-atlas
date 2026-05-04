@@ -9,8 +9,12 @@ exclusive values each), suitable as colormap dropdowns on the final viz.
 Output: pipeline/facets_schema.json (committed). Stage 07 reads this to label
 individual games. Re-run only when you want a new schema; the committed file is
 the source of truth between runs.
+
+Documents are name + tagline + detailed_description (HTML-stripped), matching stage 08
+and stage 07 per the display-vs-semantic text strategy. See CLAUDE.md.
 """
 
+import html
 import json
 import os
 import re
@@ -40,6 +44,19 @@ from config import (  # noqa: E402
 
 SAMPLES_PER_CLUSTER = 8
 MAX_LAYERS_TO_SHOW = 2
+MAX_DOC_CHARS = 6_000
+
+HTML_TAG_RE = re.compile(r"<[^>]+>")
+WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _strip_html(s: str) -> str:
+    if not s:
+        return ""
+    text = HTML_TAG_RE.sub(" ", s)
+    text = html.unescape(text)
+    return WHITESPACE_RE.sub(" ", text).strip()
+
 
 OTHER_VALUE = {
     "name": "Other",
@@ -80,14 +97,15 @@ def _build_documents(df: pd.DataFrame) -> list[str]:
     for _, row in df.iterrows():
         name = (row.get("name") or "").strip()
         tagline = (row.get("tagline") or "").strip()
-        summary = (row.get("summary") or "").strip()
-        if tagline and summary:
-            docs.append(f"{name} - {tagline}\n{summary}")
-        elif summary:
-            docs.append(f"{name}\n{summary}")
+        detailed = _strip_html(row.get("detailed_description") or "")
+        if tagline and detailed:
+            docs.append(f"{name} - {tagline}\n{detailed}"[:MAX_DOC_CHARS])
+        elif detailed:
+            docs.append(f"{name}\n{detailed}"[:MAX_DOC_CHARS])
+        elif tagline:
+            docs.append(f"{name} - {tagline}")
         else:
-            short = (row.get("short_description") or "").strip()
-            docs.append(f"{name}\n{short}" if short else name)
+            docs.append(name)
     return docs
 
 

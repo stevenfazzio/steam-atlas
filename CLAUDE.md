@@ -20,7 +20,7 @@ Ten sequential stages, each a standalone script. Run via `make pipeline` or indi
 04 summarize_descriptions.py  Claude Haiku tagline + 2-3 sent summary  (~$5-10)
 05 embed_descriptions.py      Cohere embed-v4.0, description + top tags (512-dim)
 06 reduce_umap.py             UMAP cosine, n_neighbors=15, min_dist=0.05
-07 label_facets.py            LLM-per-game label against committed schema (~$5-10)
+07 label_facets.py            LLM-per-game label against committed schema (~$50)
 08 label_topics.py            Toponymy hierarchical region labels via Claude Sonnet
 09 visualize.py               DataMapPlot interactive HTML, capsule images on hover
 ```
@@ -54,6 +54,30 @@ The design step (`pipeline/design_facets.py`) runs Toponymy on the full-dim Cohe
 Stage 07 (`07_label_facets.py`) reads the committed schema and labels each game with one Haiku call returning all facet values as JSON. Resumable, atomic-write checkpointed every 200 rows, mirrors stage 04's pattern.
 
 If `pipeline/facets_schema.json` is absent, stage 07 fails fast with a clear error. Stage 09 already tolerates a missing `data/facets.parquet`, so removing/commenting `07_label_facets.py` from `make pipeline` is the way to skip facets entirely (e.g. on a fresh repo before the design step has been run).
+
+## Text-source strategy: display vs semantic
+
+Each game has four candidate text sources. Two come from FronkonGames (Steam editorial copy) and two are produced by stage 04 (Haiku distillation):
+
+- **`detailed_description`** (FronkonGames, mean ~1,820 chars): full Steam store page text with HTML markup. Editorial but informative; contains marketing slop (press quotes, franchise pitches, calls to action) that the labeler is told to ignore.
+- **`short_description`** (FronkonGames, mean ~216 chars): separately authored short blurb. Only ~14% of games have it as a strict prefix of detailed; ~23% as a substring. Essentially unused in our pipeline; keep only as a last-resort fallback if detailed is missing.
+- **`tagline`** (Haiku, 3-7 words): "what this game IS" noun phrase. Display only.
+- **`summary`** (Haiku, 2-3 sentences, neutral voice): polished pitch with marketing copy stripped. Display only.
+
+The split: **`tagline` and `summary` for display; `detailed_description` for semantics.** Display-facing text (hovercards, overlays) wants polished and short; semantic text (embeddings, facet labeling, region naming, schema discovery) wants information-rich, even if noisy. The Haiku distillation buys polish at the cost of information loss, which hurt facet quality on utility software, hybrid genres, and mood/aesthetic distinctions before we ran the audit.
+
+**Where each lives in the pipeline:**
+
+- Stage 04 reads `detailed_description` (HTML stripped, capped at 4K chars), produces `tagline` + `summary` written back to `games.parquet`.
+- Stage 05 (embedding) reads `detailed_description` (HTML stripped, capped at 8K) + top-20 SteamSpy tags.
+- Stage 07 (facet labeling) reads `name` + `tagline` + `detailed_description` (HTML stripped, capped at 6K). Uses tagline as a one-line anchor before the source text.
+- Stage 08 (region naming) reads `name` + `tagline` + `detailed_description` (capped at 6K). Same shape as stage 07.
+- `design_facets.py` reads the same as stage 08, deliberately, so cluster identity is consistent between schema discovery and per-game labeling.
+- Stage 09 (visualize) renders `tagline` and `summary` in the hovercard. No use of `detailed_description` or `short_description`.
+
+If you change the text input to any LLM-driven stage (07, 08, design_facets), update the others too so they stay aligned. The display layer (stage 04 outputs, stage 09 hovercard) can drift independently.
+
+**Audit reference**: `experiments/ablate_detailed_vs_summary.py` justifies the switch from summary to detailed_description for stage 07. ~14-17% of labels moved at population scale, mostly toward better classifications. Known weak spot: utility/tool/hybrid software (e.g., Fantasy Grounds VTT, ShareX) where the schema lacks a "this isn't a game" bucket and richer text makes the LLM commit harder to a wrong genre. Companion ablation (`experiments/ablate_tags_in_prompt.py`) tested adding SteamSpy top-3 tags to the prompt and found a smaller, mixed-quality effect; not adopted.
 
 ## Why no fresh appdetails refetch
 
