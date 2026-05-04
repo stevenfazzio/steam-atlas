@@ -193,11 +193,21 @@ In `.env` (loaded by `python-dotenv` in `config.py`):
 
 Stages 00, 01, 02, 03, 06, 09 need no external auth (FronkonGames is a public HF parquet, SteamSpy is unauthenticated).
 
-## Stage 09 (visualize) is currently minimum-viable
+## Stage 09 (visualize) is partly ported from the sibling projects
 
-Stage 09 is roughly 250 lines vs github-map's 1400+. It has: capsule images on hover, Toponymy region labels at multiple zoom levels, click-to-Steam, search by name, and 4+ colormaps (sentiment, genre, F2P, review count, plus one per facet when stage 07 has run).
+Stage 09 is around 870 lines vs github-map's 1400+. It has: capsule images on hover, Toponymy region labels at multiple zoom levels, click-to-Steam, search by name+tagline+summary, 4+ colormaps (sentiment, primary genre, price tier, review count, plus one per facet when stage 07 has run), and an Advanced Filters panel (next section).
 
-Not yet ported from github-map: mobile-specific UI, custom filter panel beyond DataMapPlot's built-in colormap dropdown, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags, Plausible analytics. `../semantic-github-map/pipeline/07_visualize.py` is the reference when adding these.
+Not yet ported: mobile-specific UI, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags, Plausible analytics. `../semantic-github-map/pipeline/07_visualize.py` and `../huggingface-dataset-map/pipeline/05_visualize.py` are the references when adding these.
+
+### Advanced Filters panel
+
+Vendored from `../huggingface-dataset-map/pipeline/filter_panel.html` and re-themed to the dark brass/cyan palette. The template lives at `pipeline/filter_panel.html` and is split by `<!-- SECTION: css/html/js -->` markers; `_inject_filters` in `09_visualize.py` reads those sections and patches the rendered DataMapPlot HTML in three places: CSS into `<head>`, panel HTML after `<div id="search-container">`, JS before `</html>`. The injection also rewrites a regex match against `updateProgressBar('meta-data-progress', 100); checkAllDataLoaded();` to (a) build `datamap.searchArray` from the name/tagline/summary fields so the search box matches more than the title, and (b) dispatch a `datamapReady` event that the panel JS listens for to bootstrap.
+
+The panel supports two filter shapes: categorical (checkbox list) and range (dual-handle slider). Each filter declares `type: 'range'` or omits the field for the checkbox default. Categorical filters can declare an `initialChecked` allowlist and a `resetTo` target separate from "all checked"; this is what powers the **Content Rating** filter — its default state is "General only, Adult unchecked" and `_isAtReset` treats that as the unmodified-default state, so the brass active-border and Reset highlight only appear when the user actually flips Adult on. Range filters use a `sliderMax` separate from `max` to cap the slider at the 99th percentile so a long tail (e.g. CS2's 8.8M reviews vs the median ~2K) doesn't compress the useful range; when the max handle sits at the cap, `applyRangeFilter` includes everything above (no upper bound).
+
+NSFW detection (the `_is_nsfw` helper) uses a conservative rule against SteamSpy's top-10 voted tags: any of `{Hentai, NSFW}` OR both `{Sexual Content, Nudity}`. Catches ~384/10000. Lets through Cyberpunk/Witcher/BG3-tier mature mainstream titles. Known blind spot: AO games whose anonymous-storefront SteamSpy tag scrape doesn't surface the explicit tags (e.g. Mirror 2: Project X) slip through as General. Same root cause as FronkonGames' anonymous-pull limitation; documenting rather than fixing in v1.
+
+NSFW games stay in the embedding space and continue to influence Toponymy region naming — the filter only suppresses point visibility/click, never the underlying map shape.
 
 ## Sibling repos
 

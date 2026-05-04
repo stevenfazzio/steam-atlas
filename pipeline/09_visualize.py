@@ -30,9 +30,34 @@ from config import (
     UMAP_COORDS_NPZ,
 )
 
+FILTER_PANEL_HTML_TEMPLATE = Path(__file__).resolve().parent / "filter_panel.html"
+
 
 def _facet_slug(facet_name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "_", facet_name).strip("_").lower()
+
+
+# Conservative NSFW rule. A game is flagged Adult if any of these conditions
+# hold for its top-10 most-voted SteamSpy tags:
+#   - "Hentai" is present (dedicated hentai titles)
+#   - "NSFW" is present (Steam's umbrella tag)
+#   - "Sexual Content" AND "Nudity" are both present (visual-novel/erotic-game pattern)
+# Catches ~384 / 10000 in the current dataset. Lets through Mature-tagged
+# mainstream titles like Cyberpunk 2077, Witcher 3, Baldur's Gate 3.
+_NSFW_TOP_N = 10
+_NSFW_SOLO_TAGS = {"Hentai", "NSFW"}
+_NSFW_PAIR_TAGS = {"Sexual Content", "Nudity"}
+
+
+def _is_nsfw(tags_dict) -> bool:
+    if not isinstance(tags_dict, dict):
+        return False
+    counted = [(k, v) for k, v in tags_dict.items() if isinstance(v, (int, float)) and v > 0]
+    counted.sort(key=lambda kv: -kv[1])
+    top = {k for k, _ in counted[:_NSFW_TOP_N]}
+    if top & _NSFW_SOLO_TAGS:
+        return True
+    return _NSFW_PAIR_TAGS.issubset(top)
 
 
 # Tiled SVG turbulence used as a film-grain overlay on body::before. Rendered
@@ -134,17 +159,18 @@ def main():
     hover_text = df["name"].tolist()
 
     name_col = df["name"].fillna("").apply(escape).values
-    tagline_col = df.get("tagline", pd.Series([""] * len(df))).fillna("").apply(escape).values
-    summary_col = df.get("summary", pd.Series([""] * len(df))).fillna("").apply(escape).values
+    name_raw_col = df["name"].fillna("").values
+    tagline_raw_col = df.get("tagline", pd.Series([""] * len(df))).fillna("").values
+    tagline_col = pd.Series(tagline_raw_col).apply(escape).values
+    summary_raw_col = df.get("summary", pd.Series([""] * len(df))).fillna("").values
+    summary_col = pd.Series(summary_raw_col).apply(escape).values
     sentiment_col = df.get("sentiment_label", pd.Series(["Unknown"] * len(df))).fillna("Unknown").values
     sentiment_color_col = np.array([SENTIMENT_COLORS.get(s, "#999999") for s in sentiment_col])
 
-    primary_genre_col = (
-        df["genres"]
-        .apply(lambda g: str(g[0]) if isinstance(g, (list, np.ndarray)) and len(g) else "Unknown")
-        .apply(escape)
-        .values
+    primary_genre_raw_col = (
+        df["genres"].apply(lambda g: str(g[0]) if isinstance(g, (list, np.ndarray)) and len(g) else "Unknown").values
     )
+    primary_genre_col = pd.Series(primary_genre_raw_col).apply(escape).values
 
     review_str_col = np.array([_format_reviews(n) for n in df["total_reviews"]])
     price_str_col = np.array([_format_price(row) for _, row in df.iterrows()])
@@ -159,6 +185,27 @@ def main():
     # better than sqrt (which collapsed everything but CS2 to the floor).
     raw = np.log10(df["total_reviews"].values.astype(float).clip(min=1))
     marker_sizes = 3 + 12 * (raw - raw.min()) / max(raw.max() - raw.min(), 1)
+
+    # ── Bucketed filter values ───────────────────────────────────────────────
+    # Per-row strings used both as colormap raw data and as the field the
+    # filter panel matches against. Computed up-front so extra_data, the
+    # colormap appends, and the filter_config all reference the same arrays.
+    is_nsfw_arr = df["tags"].apply(_is_nsfw).values
+    content_rating_col = np.where(is_nsfw_arr, "Adult", "General")
+
+    # Primary genre: top 10 + Other (display threshold; everything past the head is
+    # too sparse to color individually). Same capping is used for filter values.
+    top_genres = pd.Series(primary_genre_raw_col).value_counts().head(10).index.tolist()
+    genres_capped = np.where(np.isin(primary_genre_raw_col, top_genres), primary_genre_raw_col, "Other")
+
+    # Free vs Paid (FronkonGames stores price as float; 0 means F2P).
+    price_tier_col = np.where(df["price"].fillna(0) == 0, "Free", "Paid")
+
+    # Facet bucketed values, one per facet column.
+    facet_cols = (
+        [c for c in facets_df.columns if c != "appid" and not c.endswith("_other")] if facets_df is not None else []
+    )
+    facet_value_arrays: dict[str, np.ndarray] = {col: df[col].fillna("Other").astype(str).values for col in facet_cols}
 
     # Sentiment chip uses the per-row sentiment_color twice: as a glowing tinted
     # background (~20% opacity) and as the foreground text/border. Gives each chip
@@ -185,21 +232,36 @@ def main():
         "</div>"
     )
 
-    extra_data = pd.DataFrame(
-        {
-            "name": name_col,
-            "tagline": tagline_col,
-            "summary": summary_col,
-            "sentiment": sentiment_col,
-            "sentiment_color": sentiment_color_col,
-            "primary_genre": primary_genre_col,
-            "review_str": review_str_col,
-            "price_str": price_str_col,
-            "header_image": header_image_col,
-            "store_url": store_urls,
-            "tag_chips": tag_chips_col,
-        }
-    )
+    extra_columns = {
+        "name": name_col,
+        "tagline": tagline_col,
+        "summary": summary_col,
+        "sentiment": sentiment_col,
+        "sentiment_color": sentiment_color_col,
+        "primary_genre": primary_genre_col,
+        "review_str": review_str_col,
+        "price_str": price_str_col,
+        "header_image": header_image_col,
+        "store_url": store_urls,
+        "tag_chips": tag_chips_col,
+        # Plain-text bucketed values for the filter panel. Each column matches
+        # the categories shown in its filter checkbox list, so the panel's
+        # per-row matching, the colormap legend, and the URL-serialized state
+        # all key off the same strings. Lowercased fields are used by the
+        # search index builder injected into the rendered HTML.
+        "name_search": pd.Series(name_raw_col).str.lower().values,
+        "tagline_search": pd.Series(tagline_raw_col).str.lower().values,
+        "summary_search": pd.Series(summary_raw_col).str.lower().values,
+        "content_rating_filter": content_rating_col,
+        "sentiment_filter": sentiment_col,
+        "primary_genre_filter": genres_capped,
+        "price_tier_filter": price_tier_col,
+        # Numeric values for the range slider (parsed via Number() in JS).
+        "reviews_filter": df["total_reviews"].astype(int).astype(str).values,
+    }
+    for col, values in facet_value_arrays.items():
+        extra_columns[f"facet_{col}_filter"] = values
+    extra_data = pd.DataFrame(extra_columns)
 
     all_rawdata = []
     all_metadata = []
@@ -220,9 +282,9 @@ def main():
         }
     )
 
-    # Primary genre (top 10 + Other)
-    top_genres = pd.Series(primary_genre_col).value_counts().head(10).index.tolist()
-    genres_capped = np.where(np.isin(primary_genre_col, top_genres), primary_genre_col, "Other")
+    # Primary genre (top 10 + Other). Raw (unescaped) values throughout so the
+    # colormap legend, filter checkboxes, and per-row matching all key off the
+    # same strings; escaping for hovercard happens separately via primary_genre_col.
     unique_genres = sorted(set(genres_capped))
     genre_palette = glasbey.create_palette(palette_size=len(unique_genres))
     genre_map = dict(zip(unique_genres, genre_palette))
@@ -236,9 +298,8 @@ def main():
         }
     )
 
-    # Free vs Paid (FronkonGames stores price as float; 0 means F2P)
-    is_free_str = np.where(df["price"].fillna(0) == 0, "Free", "Paid")
-    all_rawdata.append(is_free_str)
+    # Price tier (Free vs Paid).
+    all_rawdata.append(price_tier_col)
     all_metadata.append(
         {
             "field": "free_or_paid",
@@ -261,15 +322,9 @@ def main():
     )
 
     # Per-game facets, one colormap each (skipped when facets.parquet absent).
-    # The _other suffixed columns hold freeform labels for games in the Other
-    # bucket; they are debug/iteration data, not categorical colormaps.
     # Field names are prefixed with `facet_` to avoid colliding with the
     # built-in colormaps above (e.g. the facet schema may rediscover Primary Genre).
-    # Descriptions come from the schema's facet name when available so the dropdown
-    # shows "Primary Genre" rather than the slug-derived "Primary Genre".
-    facet_cols = (
-        [c for c in facets_df.columns if c != "appid" and not c.endswith("_other")] if facets_df is not None else []
-    )
+    # Descriptions come from the schema's facet name when available.
     if facet_cols and FACETS_SCHEMA_JSON.exists():
         with open(FACETS_SCHEMA_JSON) as f:
             schema = json.load(f)
@@ -277,7 +332,7 @@ def main():
     else:
         slug_to_name = {}
     for col in facet_cols:
-        values = df[col].fillna("Other").astype(str).values
+        values = facet_value_arrays[col]
         unique_vals = sorted(set(values))
         palette = glasbey.create_palette(palette_size=len(unique_vals))
         cmap = dict(zip(unique_vals, palette))
@@ -751,11 +806,215 @@ def main():
     )
     html = html.replace("</head>", head_inject + "</head>", 1)
 
+    filter_config = _build_filter_config(
+        n_rows=len(df),
+        sentiment_col=sentiment_col,
+        genres_capped=genres_capped,
+        price_tier_col=price_tier_col,
+        reviews_int=df["total_reviews"].astype(int).values,
+        facet_value_arrays=facet_value_arrays,
+        slug_to_name=slug_to_name,
+    )
+    html = _inject_filters(html, filter_config)
+    print(
+        f"Injected filter panel: "
+        f"{sum(len(s['filters']) for s in filter_config['sections'])} filters across "
+        f"{len(filter_config['sections'])} sections"
+    )
+
     Path(STEAM_ATLAS_HTML).write_text(html)
     print(f"Patched labelLayer characterSet ({len(chars)} chars) + font preload")
 
     DOCS_INDEX_HTML.write_text(html)
     print(f"Copied to {DOCS_INDEX_HTML}")
+
+
+# ── Filter panel injection ──────────────────────────────────────────────────
+
+
+def _build_filter_config(
+    *,
+    n_rows: int,
+    sentiment_col: np.ndarray,
+    genres_capped: np.ndarray,
+    price_tier_col: np.ndarray,
+    reviews_int: np.ndarray,
+    facet_value_arrays: dict[str, np.ndarray],
+    slug_to_name: dict[str, str],
+) -> dict:
+    """Assemble the JSON shape consumed by FilterPanel in filter_panel.html."""
+    # Sentiment in canonical order (most positive -> most negative); unknown
+    # values appended alphabetically.
+    sentiment_set = set(sentiment_col)
+    sentiment_values = [s for s in SENTIMENT_COLORS if s in sentiment_set]
+    sentiment_values += sorted(sentiment_set - set(SENTIMENT_COLORS))
+
+    def _alpha_with_other_last(values) -> list[str]:
+        out = sorted(set(values))
+        if "Other" in out:
+            out.remove("Other")
+            out.append("Other")
+        return out
+
+    genre_values = _alpha_with_other_last(genres_capped)
+    price_tier_values = sorted(set(price_tier_col))
+
+    sections = [
+        {
+            "label": "Content",
+            "filters": [
+                {
+                    "name": "content-rating",
+                    "filterId": "filter-content-rating",
+                    "label": "Content Rating",
+                    "field": "content_rating_filter",
+                    "values": ["General", "Adult"],
+                    "initialChecked": ["General"],
+                    "resetTo": ["General"],
+                }
+            ],
+        },
+        {
+            "label": "Categories",
+            "filters": [
+                {
+                    "name": "sentiment",
+                    "filterId": "filter-sentiment",
+                    "label": "Review Sentiment",
+                    "field": "sentiment_filter",
+                    "values": sentiment_values,
+                },
+                {
+                    "name": "primary-genre",
+                    "filterId": "filter-primary-genre",
+                    "label": "Primary Genre (Steam)",
+                    "field": "primary_genre_filter",
+                    "values": genre_values,
+                },
+                {
+                    "name": "price-tier",
+                    "filterId": "filter-price-tier",
+                    "label": "Price Tier",
+                    "field": "price_tier_filter",
+                    "values": price_tier_values,
+                },
+            ],
+        },
+    ]
+
+    colormap_to_filter = {
+        "sentiment": "filter-sentiment",
+        "primary_genre": "filter-primary-genre",
+        "free_or_paid": "filter-price-tier",
+    }
+
+    if facet_value_arrays:
+        facet_filters = []
+        for col, values in facet_value_arrays.items():
+            slug_for_id = col.replace("_", "-")
+            filter_id = f"filter-facet-{slug_for_id}"
+            facet_filters.append(
+                {
+                    "name": f"facet-{slug_for_id}",
+                    "filterId": filter_id,
+                    "label": slug_to_name.get(col, col.replace("_", " ").title()),
+                    "field": f"facet_{col}_filter",
+                    "values": _alpha_with_other_last(values),
+                }
+            )
+            colormap_to_filter[f"facet_{col}"] = filter_id
+        sections.append({"label": "Genre & Style", "filters": facet_filters})
+
+    # Range slider for review count. Linear slider with sliderMax = 99th
+    # percentile so the heavy tail (CS2 at 8.8M reviews vs median ~2K) doesn't
+    # compress the useful range. Max-handle-at-cap means "include everything
+    # above" — see applyRangeFilter in filter_panel.html.
+    sections.append(
+        {
+            "label": "Ranges",
+            "filters": [
+                {
+                    "type": "range",
+                    "name": "reviews",
+                    "filterId": "filter-reviews",
+                    "label": "Review Count",
+                    "field": "reviews_filter",
+                    "min": int(reviews_int.min()),
+                    "max": int(reviews_int.max()),
+                    "sliderMax": int(np.percentile(reviews_int, 99)),
+                    "step": 1,
+                    "compact": True,
+                    "capLabel": True,
+                },
+            ],
+        }
+    )
+
+    filter_to_colormap = {v: k for k, v in colormap_to_filter.items()}
+
+    return {
+        "totalCount": int(n_rows),
+        "sections": sections,
+        "colormapFieldToFilterId": colormap_to_filter,
+        "filterIdToColormapField": filter_to_colormap,
+    }
+
+
+def _inject_filters(html: str, filter_config: dict) -> str:
+    """Inject filter-panel CSS/HTML/JS and wire datamapReady into the rendered map.
+
+    Three patches:
+      1. After meta-data load completes, build a search index from name/tagline/
+         summary so the search box matches more than just the title, then dispatch
+         a `datamapReady` event with datamap + hoverData. The FilterPanel JS
+         listens for that event to bootstrap.
+      2. Inject the panel CSS into <head>.
+      3. Insert panel HTML after the search-container box, and panel JS before </html>.
+    """
+    build_search_js = (
+        "// Build search index from name/tagline/summary so users can find games\n"
+        "          // by descriptive text rather than just the exact title.\n"
+        "          (function() {\n"
+        "            var md = datamap.metaData, n = md.name_search.length;\n"
+        "            var sa = new Array(n);\n"
+        "            for (var i = 0; i < n; i++) {\n"
+        "              sa[i] = md.name_search[i] + ' ' + md.tagline_search[i] + ' ' + md.summary_search[i];\n"
+        "            }\n"
+        "            datamap.searchArray = sa;\n"
+        "          })();\n"
+        "          window.dispatchEvent(new CustomEvent('datamapReady', "
+        "{ detail: { datamap, hoverData } }));\n          "
+    )
+    new_html, n = re.subn(
+        r"(updateProgressBar\('meta-data-progress', 100\);\s*)(checkAllDataLoaded\(\);)",
+        r"\1" + build_search_js + r"\2",
+        html,
+        count=1,
+    )
+    if n != 1:
+        raise RuntimeError(
+            "Filter injection: meta-data-progress marker not found. "
+            "DataMapPlot's bundled JS may have changed; update the patch."
+        )
+    html = new_html
+
+    template = FILTER_PANEL_HTML_TEMPLATE.read_text()
+    parts = re.split(r"<!-- SECTION: (\w+) -->", template)
+    section_map = {parts[i]: parts[i + 1].strip() for i in range(1, len(parts), 2)}
+
+    js_section = section_map["js"].replace("__FILTER_CONFIG_JSON__", json.dumps(filter_config))
+
+    html = html.replace("</head>", section_map["css"] + "\n</head>", 1)
+
+    search_pattern = re.compile(r'(<div id="search-container" class="container-box[^"]*">\s*<input[^/]*/>\s*</div>)')
+    m = search_pattern.search(html)
+    if not m:
+        raise RuntimeError("Filter injection: search-container div not found.")
+    insert_pos = m.end()
+    html = html[:insert_pos] + "\n      " + section_map["html"] + "\n" + html[insert_pos:]
+
+    html = html.replace("</html>", js_section + "\n</html>", 1)
+    return html
 
 
 if __name__ == "__main__":
