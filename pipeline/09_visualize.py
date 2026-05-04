@@ -83,6 +83,29 @@ def _store_url(appid) -> str:
     return f"https://store.steampowered.com/app/{int(appid)}/"
 
 
+# SteamSpy "Early Access" votes accumulate during a game's EA period and don't
+# decay after release, so a game shipped years ago can still surface it as a
+# top tag. FronkonGames is also ~3 months stale. Strip it from chip selection.
+TAG_CHIP_STOPLIST = {"Early Access"}
+N_TAG_CHIPS = 3
+
+
+def _top_tag_chips(tags_dict) -> str:
+    """Render the top-N SteamSpy tags as chip <span>s, with stoplist applied."""
+    if not isinstance(tags_dict, dict):
+        return ""
+    counted = [(k, v) for k, v in tags_dict.items() if isinstance(v, (int, float)) and v is not None]
+    counted.sort(key=lambda x: -x[1])
+    chosen: list[str] = []
+    for tag, _ in counted:
+        if tag in TAG_CHIP_STOPLIST:
+            continue
+        chosen.append(tag)
+        if len(chosen) >= N_TAG_CHIPS:
+            break
+    return "".join(f'<span class="hc-tag">{escape(t)}</span>' for t in chosen)
+
+
 def main():
     df = pd.read_parquet(GAMES_PARQUET)
     coords = np.load(UMAP_COORDS_NPZ)["coords"]
@@ -126,6 +149,7 @@ def main():
     review_str_col = np.array([_format_reviews(n) for n in df["total_reviews"]])
     price_str_col = np.array([_format_price(row) for _, row in df.iterrows()])
     header_image_col = df["header_image"].fillna("").values
+    tag_chips_col = df["tags"].apply(_top_tag_chips).values
 
     appids = df["appid"].astype(int).values
     store_urls = np.array([_store_url(a) for a in appids])
@@ -155,6 +179,7 @@ def main():
         '      <span class="hc-chip hc-chip-num">{review_str}</span>'
         '      <span class="hc-chip hc-chip-num">{price_str}</span>'
         "    </div>"
+        '    <div class="hc-tags">{tag_chips}</div>'
         '    <div class="hc-summary">{summary}</div>'
         "  </div>"
         "</div>"
@@ -172,6 +197,7 @@ def main():
             "price_str": price_str_col,
             "header_image": header_image_col,
             "store_url": store_urls,
+            "tag_chips": tag_chips_col,
         }
     )
 
@@ -570,6 +596,31 @@ def main():
     .hc-chip-num {
         font-variant-numeric: tabular-nums;
         color: var(--text);
+    }
+    /* SteamSpy top-tag chips. Visually quieter than the metadata chips above
+       (no fill, dimmer text) so they read as user-applied descriptors rather
+       than facts about the game. */
+    .hc-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 8px;
+    }
+    .hc-tags:empty { display: none; }
+    .hc-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        border-radius: 2px;
+        background: transparent;
+        color: var(--text-faint);
+        border: 1px solid var(--rule);
+        white-space: nowrap;
     }
     .hc-summary {
         font-family: 'IBM Plex Sans', sans-serif;
