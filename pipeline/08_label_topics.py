@@ -107,7 +107,11 @@ def main():
         raise ValueError("Toponymy produced 0 cluster layers")
     print(f"Toponymy produced {n_layers} cluster layer(s)")
 
-    # DataMapPlot expects coarsest first
+    # Parquet convention: label_layer_0 = coarsest. NOTE: DataMapPlot itself
+    # wants label layers FINEST-first (create_interactive_plot docstring), so
+    # stage 09 reverses these columns at the call site. The old comment here
+    # ("DataMapPlot expects coarsest first") was wrong and inverted the map's
+    # label zoom gating + collision priority until 2026-07-09.
     labels_dict = {"appid": df["appid"].astype(int).reset_index(drop=True)}
     for i, layer in enumerate(reversed(topic_model.cluster_layers_)):
         labels_dict[f"label_layer_{i}"] = layer.topic_name_vector

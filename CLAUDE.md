@@ -87,6 +87,19 @@ The appdetails fetcher is preserved at `experiments/fetch_appdetails.py` for fut
 
 ## Gotchas (learned the hard way)
 
+### DataMapPlot label layers go FINEST-first (fixed 2026-07-09)
+
+`create_interactive_plot(coords, *label_layers)` expects the **most
+fine-grained layer first, coarsest last** (its own docstring), and
+`hierarchical_collision_priority` (default True in 0.7.x) gives the later
+(coarser) layers the collision win. This repo passed coarsest-first for its
+whole life — stage 08's old comment "DataMapPlot expects coarsest first" was
+backwards — which inverted the label zoom gating: hyper-specific labels
+dominated the overview zoom and the 5 coarse region names almost never
+rendered. `labels.parquet` still stores `label_layer_0` = coarsest (readable
+convention); stage 09 now reverses at the call site. Found while wiring the
+sibling living-people-map.
+
 ### FronkonGames data quirks
 
 Source: `https://huggingface.co/datasets/FronkonGames/steam-games-dataset` (last upload 2026-02-02).

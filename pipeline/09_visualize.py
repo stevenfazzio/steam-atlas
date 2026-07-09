@@ -154,7 +154,12 @@ def main():
         print("  (no facets.parquet; skipping facet colormaps)")
 
     label_columns = sorted(c for c in df.columns if c.startswith("label_layer_"))
-    topic_name_vectors = [df[c].fillna("").values for c in label_columns]
+    # labels.parquet stores label_layer_0 = COARSEST; DataMapPlot wants label
+    # layers FINEST-first (create_interactive_plot docstring; its
+    # hierarchical_collision_priority lets coarser = later layers win
+    # collisions). Passing coarsest-first inverted zoom gating so fine labels
+    # crowded the overview zoom (fixed 2026-07-09, found via living-people-map).
+    topic_name_vectors = [df[c].fillna("").values for c in reversed(label_columns)]
 
     hover_text = df["name"].tolist()
 
