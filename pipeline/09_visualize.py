@@ -133,8 +133,8 @@ def _top_tag_chips(tags_dict) -> str:
 
 # Plausible analytics: the one site that covers all of stevenfazzio.com. The script
 # ignores localhost and file:// pages, so local previews stay out of the stats. It
-# goes in <head>, ahead of the filter panel's no-op plausible() stub in <body>, so the
-# panel's custom events reach the real script.
+# goes in <head>, ahead of the filter panel's no-op plausible() stub in <body>, so an
+# event fired before the script loads is queued for it, not swallowed by the stub.
 PLAUSIBLE_SNIPPET = """<!-- Privacy-friendly analytics by Plausible -->
 <script async src="https://plausible.io/js/pa-dvmKWiL1gpqH63wOvMp-g.js"></script>
 <script>

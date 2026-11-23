@@ -212,7 +212,7 @@ Stage 09 is around 870 lines vs github-map's 1400+. It has: capsule images on ho
 
 Not yet ported: mobile-specific UI, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags. `../semantic-github-map/pipeline/07_visualize.py` and `../huggingface-dataset-map/pipeline/05_visualize.py` are the references when adding these.
 
-Plausible analytics is in: stage 09 puts `PLAUSIBLE_SNIPPET` in `<head>`, reporting to the one Plausible site for all of stevenfazzio.com (not a per-project site). It has to stay ahead of the filter panel's no-op `plausible()` stub, or the panel's events go nowhere.
+Plausible analytics is in: stage 09 puts `PLAUSIBLE_SNIPPET` in `<head>`, reporting to the one Plausible site for all of stevenfazzio.com (not a per-project site). Keep it ahead of the filter panel's no-op `plausible()` stub: either order works once the script has loaded, but with the stub first, an event fired before then is swallowed instead of queued.
 
 ### Advanced Filters panel
 
