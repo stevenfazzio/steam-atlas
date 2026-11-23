@@ -131,6 +131,18 @@ def _top_tag_chips(tags_dict) -> str:
     return "".join(f'<span class="hc-tag">{escape(t)}</span>' for t in chosen)
 
 
+# Plausible analytics: the one site that covers all of stevenfazzio.com. The script
+# ignores localhost and file:// pages, so local previews stay out of the stats. It
+# goes in <head>, ahead of the filter panel's no-op plausible() stub in <body>, so the
+# panel's custom events reach the real script.
+PLAUSIBLE_SNIPPET = """<!-- Privacy-friendly analytics by Plausible -->
+<script async src="https://plausible.io/js/pa-dvmKWiL1gpqH63wOvMp-g.js"></script>
+<script>
+  window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+  plausible.init()
+</script>"""
+
+
 def main():
     df = pd.read_parquet(GAMES_PARQUET)
     coords = np.load(UMAP_COORDS_NPZ)["coords"]
@@ -808,6 +820,8 @@ def main():
         '<link rel="preconnect" href="https://fonts.googleapis.com">\n'
         '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
         f'<link rel="stylesheet" href="{font_url}">\n'
+        + PLAUSIBLE_SNIPPET
+        + "\n"
     )
     html = html.replace("</head>", head_inject + "</head>", 1)
 

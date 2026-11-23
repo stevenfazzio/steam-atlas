@@ -210,7 +210,9 @@ Stages 00, 01, 02, 03, 06, 09 need no external auth (FronkonGames is a public HF
 
 Stage 09 is around 870 lines vs github-map's 1400+. It has: capsule images on hover, Toponymy region labels at multiple zoom levels, click-to-Steam, search by name+tagline+summary, 4+ colormaps (sentiment, primary genre, price tier, review count, plus one per facet when stage 07 has run), and an Advanced Filters panel (next section).
 
-Not yet ported: mobile-specific UI, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags, Plausible analytics. `../semantic-github-map/pipeline/07_visualize.py` and `../huggingface-dataset-map/pipeline/05_visualize.py` are the references when adding these.
+Not yet ported: mobile-specific UI, edge-bundling background image, per-point text labels at zoom, hand-authored About page (with `<!-- DATA_AS_OF -->` placeholder pattern), Open Graph / social-preview tags. `../semantic-github-map/pipeline/07_visualize.py` and `../huggingface-dataset-map/pipeline/05_visualize.py` are the references when adding these.
+
+Plausible analytics is in: stage 09 puts `PLAUSIBLE_SNIPPET` in `<head>`, reporting to the one Plausible site for all of stevenfazzio.com (not a per-project site). It has to stay ahead of the filter panel's no-op `plausible()` stub, or the panel's events go nowhere.
 
 ### Advanced Filters panel
 
